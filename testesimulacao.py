@@ -2,7 +2,7 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap.toast import ToastNotification
-from tkinter import messagebox, Toplevel, Entry, Button, StringVar
+from tkinter import messagebox, Toplevel, Entry, Button, StringVar, scrolledtext
 from datetime import date
 from dateutil.relativedelta import relativedelta
 import os
@@ -13,7 +13,7 @@ import webbrowser
 import platform
 
 # --- Variáveis Globais e Constantes ---
-APP_VERSION = "2.1.5" # Nova versão com popups padronizados e motivos pre-definidos
+APP_VERSION = "2.1.6" # Nova versão: CPF com mascara, tela cheia, msg pos-link, fix "outros", botoes maiores
 VERSION_URL = "https://raw.githubusercontent.com/gabriielgouvea/veritas/main/version.json" 
 
 calculo_resultado = {}
@@ -57,12 +57,22 @@ def validar_matricula(P):
     if len(P) > 6: return False
     return str.isdigit(P) or P == ""
 
-def validar_cpf_input(P):
-    if len(P) > 11: return False
-    return str.isdigit(P) or P == ""
+# --- FUNÇÃO ATUALIZADA: VALIDAR E FORMATAR CPF ---
+def validar_e_formatar_cpf_input(P):
+    # Remove qualquer caractere que não seja número
+    numeros = ''.join(filter(str.isdigit, P))
+    if len(numeros) > 11:
+        return False # Impede que digite mais de 11 números
+
+    # A validação do algoritmo real do CPF será feita na confirmação do popup.
+    # Aqui é apenas para permitir a digitação/colagem e remover caracteres inválidos.
+    return True
+
+def limpar_cpf(cpf_sujo):
+    return ''.join(filter(str.isdigit, cpf_sujo))
 
 def validar_cpf_algoritmo(cpf):
-    cpf = ''.join(filter(str.isdigit, cpf));
+    cpf = limpar_cpf(cpf) # Garante que só tem dígitos
     if len(cpf) != 11 or cpf == cpf[0] * 11: return False
     try:
         soma = sum(int(cpf[i]) * (10 - i) for i in range(9)); digito1 = (soma * 10 % 11) % 10
@@ -138,9 +148,12 @@ class App(ttk.Window):
         super().__init__(*args, **kwargs)
 
         self.title(f"Veritas | Simulador de Cancelamento v{APP_VERSION}")
-        self.geometry("1100x700")
+        # self.geometry("1100x700") # Removido para usar tela cheia
+        self.state('zoomed')  # Inicia em tela cheia (Windows/Linux)
+        if platform.system() == "Darwin": # Para macOS, pode ser 'fullscreen'
+            self.attributes('-fullscreen', True) 
         self.resizable(True, True)
-        self.place_window_center()
+        # self.place_window_center() # Não é necessário com tela cheia
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -228,9 +241,8 @@ class App(ttk.Window):
         ttk.Separator(self.main_frame).pack(fill='x', pady=10)
         ttk.Label(self.main_frame, text="Esta área ainda está em desenvolvimento...", font=("Helvetica", 12)).pack(pady=5, anchor='w')
     
-    # --- NOVO MÉTODO PARA CENTRALIZAR POPUPS ---
     def _center_popup(self, popup, width, height):
-        self.update_idletasks() # Atualiza para garantir que as dimensões da janela principal estejam corretas
+        popup.update_idletasks() # Atualiza para garantir que as dimensões da janela principal estejam corretas
         main_x = self.winfo_x()
         main_y = self.winfo_y()
         main_width = self.winfo_width()
@@ -244,16 +256,14 @@ class App(ttk.Window):
         popup.transient(self) # Faz o popup ser dependente da janela principal
         popup.grab_set()      # Bloqueia interações com a janela principal
 
-    # --- MÉTODO ATUALIZADO PARA O POPUP DE MOTIVO COM OPÇÕES ---
     def _ask_for_reason_popup(self):
         self.popup_motivo = None # Variável para guardar o resultado
 
         popup = Toplevel(self)
         popup.title("Motivo do Cancelamento")
         
-        # Define o tamanho para o popup de motivo (ajustado para as opções)
-        popup_width = 500
-        popup_height = 350
+        popup_width = 550 # Ligeiramente maior para acomodar a Entry de "Outros"
+        popup_height = 400
         self._center_popup(popup, popup_width, popup_height)
 
         container = ttk.Frame(popup, padding=20)
@@ -261,25 +271,32 @@ class App(ttk.Window):
         
         ttk.Label(container, text="Selecione o motivo do cancelamento:", font=("-weight bold")).pack(pady=(0, 10), anchor='w')
         
-        # Variável para os Radiobuttons
         selected_reason = StringVar(value="") 
         entry_other_reason = None # Variável para a Entry de "Outros"
+        
+        # Frame para os Radiobuttons para centralizar melhor a entry
+        radio_frame = ttk.Frame(container)
+        radio_frame.pack(fill='x', anchor='w')
 
         def update_other_entry_state():
             nonlocal entry_other_reason
             if selected_reason.get() == "OUTROS":
-                if entry_other_reason is None: # Cria a entry se ainda não existe
-                    entry_other_reason = ttk.Entry(container, width=50)
-                    entry_other_reason.pack(pady=5, anchor='w')
+                if entry_other_reason is None: 
+                    # Cria a Entry em um frame separado para controle de layout
+                    other_entry_container = ttk.Frame(container)
+                    other_entry_container.pack(fill='x', pady=5, anchor='w')
+                    ttk.Label(other_entry_container, text="Descreva:").pack(side='left', padx=(0,5))
+                    entry_other_reason = ttk.Entry(other_entry_container, width=50)
+                    entry_other_reason.pack(side='left', fill='x', expand=True)
                     entry_other_reason.focus_set()
             else:
-                if entry_other_reason is not None: # Destrói a entry se existe
-                    entry_other_reason.destroy()
+                if entry_other_reason is not None: 
+                    # Destrói a Entry e seu container
+                    entry_other_reason.master.destroy()
                     entry_other_reason = None
         
-        # Cria os Radiobuttons para os motivos
         for motivo in MOTIVOS_CANCELAMENTO:
-            rb = ttk.Radiobutton(container, text=motivo, variable=selected_reason, value=motivo, command=update_other_entry_state, style='Toolbutton')
+            rb = ttk.Radiobutton(radio_frame, text=motivo, variable=selected_reason, value=motivo, command=update_other_entry_state, style='Toolbutton')
             rb.pack(anchor='w', pady=2)
         
         def on_confirm():
@@ -294,7 +311,7 @@ class App(ttk.Window):
                 if entry_other_reason is None or not entry_other_reason.get():
                     messagebox.showwarning("Campo Vazio", "Por favor, descreva o motivo em 'Outros'.", parent=popup)
                     return
-                final_motivo = f"OUTROS: {entry_other_reason.get()}"
+                final_motivo = f"OUTROS: {entry_other_reason.get().strip().upper()}" # Converte para maiúsculas e remove espaços
             else:
                 final_motivo = motivo_selecionado
 
@@ -334,12 +351,12 @@ class App(ttk.Window):
         self.clipboard_clear(); self.clipboard_append(texto_formatado)
         self.show_toast("Texto Copiado!", "Detalhes do cancelamento copiados com sucesso.")
 
-    # --- MÉTODO ATUALIZADO PARA O POPUP DE LINK ---
+    # --- MÉTODO ATUALIZADO PARA O POPUP DE LINK E COPIA COM MENSAGEM ---
     def mostrar_janela_com_link(self, link):
         janela_link = Toplevel(self); janela_link.title("Link Gerado com Sucesso!")
         
-        popup_width = 450 # Mesma largura do popup de CPF
-        popup_height = 180 # Altura ajustada
+        popup_width = 450 
+        popup_height = 180 
         self._center_popup(janela_link, popup_width, popup_height)
         
         container = ttk.Frame(janela_link, padding=20); container.pack(fill='both', expand=True)
@@ -348,13 +365,20 @@ class App(ttk.Window):
         entry_link.insert(0, link)
         entry_link.pack(padx=10, pady=5); entry_link.config(state="readonly")
         
-        def copiar_link():
-            self.clipboard_clear(); self.clipboard_append(link)
-            self.show_toast("Link Copiado!", "O link foi copiado para a área de transferência.")
-            # Não mudamos o texto do botão para que o popup possa ser fechado e reaberto sem confusão.
-            # Se a cópia já foi avisada pelo toast, mudar o texto do botão é redundante.
-        
-        ttk.Button(container, text="Copiar Link", command=copiar_link, style='primary.TButton').pack(pady=10)
+        def copiar_link_e_mensagem():
+            nome_cliente = self.entry_nome_cliente.get()
+            # Mensagem mais amigável
+            mensagem_completa = (
+                "Para prosseguir com o cancelamento da sua matrícula, "
+                "preciso que preencha as informações e assine "
+                f"através deste link: {link}\n\n"
+                "Por favor, me mande o PDF assim que finalizar, ok? 😉"
+            )
+            self.clipboard_clear(); self.clipboard_append(mensagem_completa)
+            self.show_toast("Mensagem Copiada!", "O link e a mensagem para o cliente foram copiados!")
+            janela_link.destroy() # Fecha o popup após copiar a mensagem
+
+        ttk.Button(container, text="Copiar Mensagem e Link", command=copiar_link_e_mensagem, style='primary.TButton').pack(pady=10)
         
         self.wait_window(janela_link)
 
@@ -374,14 +398,28 @@ class App(ttk.Window):
         container.pack(fill='both', expand=True)
         
         ttk.Label(container, text="Digite o CPF do Cliente:", font=("-weight bold")).pack(pady=(0, 10))
-        vcmd_cpf = (container.register(validar_cpf_input), '%P')
-        entry_cpf_popup = ttk.Entry(container, width=30, validate="key", validatecommand=vcmd_cpf); entry_cpf_popup.pack(pady=5); entry_cpf_popup.focus_set()
+        
+        # Validação para permitir apenas dígitos e limitar a 11 caracteres
+        vcmd_cpf = (self.register(validar_e_formatar_cpf_input), '%P')
+        entry_cpf_popup = ttk.Entry(container, width=30, validate="key", validatecommand=vcmd_cpf)
+        entry_cpf_popup.pack(pady=5)
+        entry_cpf_popup.focus_set()
         
         def finalizar_geracao():
-            cpf_cliente = entry_cpf_popup.get()
-            if not validar_cpf_algoritmo(cpf_cliente): 
+            cpf_cliente_raw = entry_cpf_popup.get()
+            cpf_limpo = limpar_cpf(cpf_cliente_raw) # Limpa pontos e traços antes de validar
+            
+            if not validar_cpf_algoritmo(cpf_limpo): 
                 messagebox.showerror("CPF Inválido", "O CPF digitado não é válido.", parent=popup); return
-            dados_para_enviar = {"nome": nome_cliente.upper(), "cpf": cpf_cliente, "matricula": matricula, "valor_multa": f"{calculo_resultado['total_a_pagar']:.2f}", "data_inicio_contrato": calculo_resultado['data_inicio_contrato'].strftime('%d/%m/%Y'),"consultor": consultor_selecionado.upper()}
+            
+            dados_para_enviar = {
+                "nome": nome_cliente.upper(), 
+                "cpf": cpf_limpo, # Envia o CPF limpo
+                "matricula": matricula, 
+                "valor_multa": f"{calculo_resultado['total_a_pagar']:.2f}", 
+                "data_inicio_contrato": calculo_resultado['data_inicio_contrato'].strftime('%d/%m/%Y'),
+                "consultor": consultor_selecionado.upper()
+            }
             popup.destroy()
             try:
                 url_api = "https://assinagym.onrender.com/api/gerar-link"
@@ -433,12 +471,12 @@ class App(ttk.Window):
         self.entry_nome_cliente.grid(row=1, column=2, sticky="w", pady=4)
 
         frame_botoes_copiar = ttk.Frame(self.frame_whatsapp)
-        frame_botoes_copiar.grid(row=2, column=1, columnspan=2, pady=15) # Ajustado para row 2
+        frame_botoes_copiar.grid(row=2, column=1, columnspan=2, pady=15)
         
         ttk.Button(frame_botoes_copiar, text="Copiar (Pendências)", style='success.Outline.TButton', command=self.copiar_texto_gerencia).pack(side="left", padx=5)
         ttk.Button(frame_botoes_copiar, text="Copiar Detalhes", style='info.Outline.TButton', command=self.copiar_texto_cliente).pack(side="right", padx=5)
         
-        ttk.Button(self.frame_whatsapp, text="Gerar Link de Assinatura", style='danger.TButton', command=self.gerar_documento_popup).grid(row=3, column=1, columnspan=2, pady=(5,0), sticky='ew') # Ajustado para row 3
+        ttk.Button(self.frame_whatsapp, text="Gerar Link de Assinatura", style='danger.TButton', command=self.gerar_documento_popup).grid(row=3, column=1, columnspan=2, pady=(5,0), sticky='ew')
         
         self.frame_whatsapp.columnconfigure(0, weight=1); self.frame_whatsapp.columnconfigure(3, weight=1)
 
@@ -502,8 +540,9 @@ class App(ttk.Window):
             self.entry_matricula.delete(0, 'end'); self.entry_nome_cliente.delete(0, 'end')
             calculo_resultado = {}
 
-        ttk.Button(frame_botoes, text="Calcular", command=do_calculation, style='success.TButton').pack(side="left", expand=True, padx=5)
-        ttk.Button(frame_botoes, text="Nova Simulação", command=clear_fields, style='danger.TButton').pack(side="right", expand=True, padx=5)
+        # Ajuste do tamanho dos botões
+        ttk.Button(frame_botoes, text="Calcular", command=do_calculation, style='success.TButton', width=20).pack(side="left", expand=True, padx=5)
+        ttk.Button(frame_botoes, text="Nova Simulação", command=clear_fields, style='danger.TButton', width=20).pack(side="right", expand=True, padx=5)
 
 # --- Bloco Principal ---
 if __name__ == "__main__":

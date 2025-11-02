@@ -33,7 +33,7 @@ except ImportError:
 import shutil 
 
 # --- Variáveis Globais e Constantes ---
-APP_VERSION = "3.4.1-Crash-Fix" 
+APP_VERSION = "4.0.0-Crash-Fix" 
 VERSION_URL = "https://raw.githubusercontent.com/gabriielgouvea/veritas/main/version.json" 
 
 # CORREÇÃO: Define o caminho da pasta 'data'

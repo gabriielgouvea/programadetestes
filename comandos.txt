@@ -1,0 +1,81 @@
+pyinstaller --onefile --windowed --name=Veritas --add-data "modelo_final.docx;." simulacaocanciron.py
+
+python -m venv venv
+
+.\venv\scripts\activate
+
+✅ Fase 1: Modificar o Código (Python)
+[ ] 1. Adicionar o Consultor: Abra seu arquivo .py e adicione o nome do novo funcionário na lista CONSULTORES.
+
+[ ] 2. ATUALIZAR A VERSÃO NO CÓDIGO (Crítico): No mesmo arquivo, encontre a variável APP_VERSION e mude o número para a nova versão.
+
+De: APP_VERSION = "1.0.3"
+
+Para: APP_VERSION = "1.0.4"
+
+[ ] 3. Salvar o Arquivo: Salve todas as suas alterações no script Python.
+
+✅ Fase 2: Gerar o Novo Arquivo Executável (.EXE)
+[ ] 1. Abrir o Terminal: Abra um terminal (como o do VS Code) na pasta raiz do seu projeto (ex: C:\programadetestes).
+
+[ ] 2. Executar o PyInstaller: Rode o comando exato que já inclui seu arquivo de modelo (.docx).
+
+Bash
+
+pyinstaller --onefile --windowed --name=Veritas --add-data "modelo_final.docx;." seu_script.py
+(Lembre-se de substituir seu_script.py pelo nome correto do seu arquivo Python).
+
+[ ] 3. Verificar o Resultado: Confirme que um novo arquivo Veritas.exe foi criado dentro da pasta dist.
+
+✅ Fase 3: Criar o Novo Instalador (Inno Setup)
+[ ] 1. Abrir o Script do Inno Setup: Encontre e abra seu arquivo .iss (ex: Veritas_script.iss).
+
+[ ] 2. ATUALIZAR A VERSÃO NO SCRIPT: No topo do arquivo, encontre a linha #define MyAppVersion e mude para a nova versão.
+
+De: #define MyAppVersion "1.0.3"
+
+Para: #define MyAppVersion "1.0.4"
+
+[ ] 3. Verificar o Nome do Executável: Apenas confirme se a linha #define MyAppExeName ainda está como "Veritas.exe".
+
+[ ] 4. Compilar o Instalador: Aperte a tecla F9 (ou clique no botão Build).
+
+[ ] 5. Localizar o Instalador: Vá para sua pasta de saída e encontre o novo instalador Setup-Veritas.exe (ou o nome que você deu).
+
+✅ Fase 4: Publicar a Nova Versão no GitHub
+[ ] 1. Ir para "Releases": No seu repositório GitHub, clique em "Releases".
+
+[ ] 2. Criar Novo Release: Clique em "Create a new release".
+
+[ ] 3. Preencher os Campos:
+
+Tag: v1.0.4 (crie esta nova tag).
+
+Título: Versão 1.0.4.
+
+[ ] 4. Anexar o Instalador: Arraste o novo Setup-Veritas.exe para a caixa de anexos.
+
+[ ] 5. Publicar: Espere o upload terminar e clique em "Publish release".
+
+[ ] 6. Copiar o Link do Instalador: Na página do novo release, clique com o botão direito sobre o Setup-Veritas.exe e selecione "Copiar endereço do link".
+
+[ ] 7. ATUALIZAR O version.json (A Conexão Final):
+
+Volte para a página principal do seu repositório.
+
+Edite o arquivo version.json.
+
+Mude a "version" para "1.0.4".
+
+Cole o novo link no campo "download_url".
+
+Salve ("Commit") as alterações.
+
+✅ Fase 5: Teste Final (A Prova Real)
+[ ] 1. Execute a Versão Antiga: Se você ainda tiver a versão 1.0.3 instalada no seu computador, abra-a.
+
+[ ] 2. Verifique a Atualização: Clique no botão "Verificar Atualizações...".
+
+[ ] 3. Confirme o Resultado: Uma mensagem deve aparecer avisando que a nova versão 1.0.4 está disponível. Ao clicar "Sim", seu navegador deve abrir o link de download do GitHub.
+
+python -m PyInstaller Veritas.spec

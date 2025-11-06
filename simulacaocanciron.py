@@ -34,7 +34,7 @@ import shutil
 # --- IMPORTAÇÕES DO LOCUTOR (VOZ NATURAL EDGE) ---
 import asyncio              # Necessário para o edge-tts
 from edge_tts import Communicate  # O motor de voz do Edge
-from playsound import playsound # O player de áudio
+import pygame               # NOVO PLAYER DE ÁUDIO (substitui playsound)
 # (O 'os' e 'traceback' já foram importados acima)
 
 # --- Variáveis Globais e Constantes ---
@@ -289,6 +289,12 @@ class App(ttk.Window):
         # --- Iniciar na Tela de Login ---
         self.show_login_view()
         self.style.theme_use('flatly')
+        
+        # --- Inicializar o Mixer de Áudio (para o Locutor) ---
+        try:
+            pygame.mixer.init()
+        except Exception as e:
+            messagebox.showerror("Erro de Áudio", f"Não foi possível iniciar o mixer de áudio (Pygame).\n{e}")
 
 
     def load_images(self):
@@ -310,10 +316,13 @@ class App(ttk.Window):
             self.icon_folgas = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "days_off.png")).resize(ICON_SIZE))
             self.icon_updates = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "updates.png")).resize(ICON_SIZE))
             self.icon_developer = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "developer.png")).resize(ICON_SIZE))
+            # --- Ícone do Locutor (CARREGAMENTO REAL) ---
+            self.icon_locutor = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "microphone.png")).resize(ICON_SIZE))
+            
         except Exception as e:
             messagebox.showerror("Erro ao Carregar Ícones", f"Não foi possível carregar alguns ícones da pasta 'data'.\n\nVerifique se os ícones necessários estão na pasta 'data'.\n\nErro: {e}")
             self.icon_simulador = self.icon_comissao = self.icon_folgas = self.default_icon
-            self.icon_updates = self.icon_developer = self.default_icon
+            self.icon_updates = self.icon_developer = self.icon_locutor = self.default_icon # Adicionado locutor ao fallback
 
         # --- *** CORREÇÃO: REDIMENSIONAR A LOGO *** ---
         try:
@@ -339,9 +348,7 @@ class App(ttk.Window):
             print(f"AVISO: Não foi possível carregar a logo_completa.png: {e}")
             self.logo_login = None # Define como None se falhar
 
-        # --- Ícone 'fantasma' para o Locutor (temporário) ---
-        # (Você pode trocar por um "microphone.png" depois)
-        self.icon_locutor = self.icon_developer # Vamos usar o ícone do dev por enquanto
+        # (Linha do ícone 'fantasma' removida)
 
 
     def load_profile_picture(self, foto_path, size=PROFILE_PIC_SIZE, is_dev_preview=False):
@@ -1622,9 +1629,36 @@ class App(ttk.Window):
         self.entry_locutor = scrolledtext.ScrolledText(frame_custom, font=self.FONT_MAIN, height=3, width=80)
         self.entry_locutor.grid(row=0, column=0, sticky='nsew', pady=(5, 10))
 
+        # --- LÓGICA DO PLACEHOLDER ---
+        placeholder_text = "Digite aqui..."
+        placeholder_color = 'gray'
+        default_fg_color = self.entry_locutor.cget('foreground') 
+
+        def add_placeholder(event=None):
+            if not self.entry_locutor.get("1.0", "end-1c").strip():
+                self.entry_locutor.delete("1.0", "end")
+                self.entry_locutor.insert("1.0", placeholder_text)
+                self.entry_locutor.config(foreground=placeholder_color)
+
+        def remove_placeholder(event=None):
+            if self.entry_locutor.get("1.0", "end-1c").strip() == placeholder_text:
+                self.entry_locutor.delete("1.0", "end")
+                self.entry_locutor.config(foreground=default_fg_color)
+
+        add_placeholder()
+        self.entry_locutor.bind("<FocusIn>", remove_placeholder)
+        self.entry_locutor.bind("<FocusOut>", add_placeholder)
+        
+        def falar_personalizado():
+            texto = self.entry_locutor.get("1.0", "end-1c").strip()
+            if texto == placeholder_text:
+                texto = "" 
+            self.falar_no_microfone(texto)
+            add_placeholder() # Garante que o placeholder volte depois de falar
+
         btn_falar = ttk.Button(frame_custom, text="FALAR MENSAGEM PERSONALIZADA", 
                                style="success.TButton", 
-                               command=lambda: self.falar_no_microfone(self.entry_locutor.get("1.0", "end-1c")))
+                               command=falar_personalizado) # Comando atualizado
         btn_falar.grid(row=1, column=0, sticky='ew', ipady=10)
 
         # --- Preenche a lista de mensagens padrão ---
@@ -1766,7 +1800,7 @@ class App(ttk.Window):
         btn_cancel.pack(side='right', padx=10, pady=(15, 0))
 
 
-    # --- MÉTODO PARA O LOCUTOR (VERSÃO COM VOZ NATURAL Edge-TTS) ---
+    # --- MÉTODO DO LOCUTOR (NOVO: Pygame, Toque de Alerta e Repetição) ---
     def falar_no_microfone(self, texto):
         if not texto.strip():
             messagebox.showwarning("Atenção", "O campo de texto está vazio.")
@@ -1781,7 +1815,7 @@ class App(ttk.Window):
         # Define o nome do arquivo de fala temporário
         temp_file = os.path.join(SCRIPT_PATH, "temp_locutor_audio.mp3")
         
-        # --- NOVO: Define o caminho do arquivo de alerta ---
+        # Define o caminho do arquivo de alerta
         alerta_file = os.path.join(DATA_FOLDER_PATH, "alerta.mp3")
 
         # edge-tts é assíncrono, então precisamos de uma função async
@@ -1793,34 +1827,47 @@ class App(ttk.Window):
 
         try:
             # --- PASSO 1: Gerar o arquivo de fala ---
-            # Roda a função assíncrona para criar o temp_file
             asyncio.run(_gerar_arquivo_fala())
             
-            # --- PASSO 2: Tocar a sequência ---
-            # Agora que o arquivo existe, podemos tocar tudo de forma síncrona
+            # --- PASSO 2: Tocar a sequência com Pygame ---
             
             # 2a. Tocar o alerta (se existir)
             if os.path.exists(alerta_file):
                 print("Locutor: Tocando alerta...")
-                playsound(alerta_file)
+                pygame.mixer.music.load(alerta_file)
+                pygame.mixer.music.play()
+                # Espera o som terminar
+                while pygame.mixer.music.get_busy():
+                    pygame.time.Clock().tick(10)
             else:
                 print("Aviso: 'alerta.mp3' não encontrado na pasta 'data'. Pulando o toque.")
-                # (Opcional: podemos dar um beep do sistema, mas por enquanto só pulamos)
             
             # 2b. Tocar a fala (2x)
+            if not os.path.exists(temp_file):
+                raise FileNotFoundError("Arquivo de fala temporário não foi criado.")
+            
             print("Locutor: Tocando fala (1/2)...")
-            playsound(temp_file)
+            pygame.mixer.music.load(temp_file)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+            
             print("Locutor: Tocando fala (2/2)...")
-            playsound(temp_file)
+            pygame.mixer.music.play() # Só precisa tocar de novo
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
             
         except Exception as e:
-            # Captura erros do asyncio, edge-tts ou playsound
+            # Captura erros do asyncio, edge-tts ou pygame
             print(f"Erro no processo de locução: {e}")
             messagebox.showerror("Erro de Locutor", f"Não foi possível gerar ou tocar a voz.\n\nVerifique sua conexão com a internet.\n\nErro: {e}\n\n{traceback.format_exc()}")
                 
         finally:
             # --- PASSO 3: Limpar ---
-            # Garante que o arquivo de fala temporário seja removido
+            # Libera o arquivo do mixer ANTES de tentar deletar
+            pygame.mixer.music.stop()
+            pygame.mixer.music.unload() 
+            
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)

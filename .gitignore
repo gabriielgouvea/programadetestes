@@ -18,3 +18,4 @@ __pycache__/
 
 # Arquivos de IDE (como VS Code)
 .vscode/
+data/firebase-key.json

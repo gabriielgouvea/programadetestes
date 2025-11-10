@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from ttkbootstrap.toast import ToastNotification
-# Importamos Panedwindow (com W maiúsculo) do ttkbootstrap, que é o correto
-from ttkbootstrap.widgets import Panedwindow
-from ttkbootstrap.scrolled import ScrolledFrame
+from ttkbootstrap.widgets import DateEntry, ToastNotification
+# --- CORREÇÃO DE IMPORTAÇÃO ---
+from ttkbootstrap.widgets.scrolled import ScrolledFrame # Importado do local correto
 from tkinter import messagebox, Toplevel, Entry, Button, StringVar, scrolledtext, \
     PhotoImage, Listbox, filedialog, END, ANCHOR
+# --- NOVA IMPORTAÇÃO para o LabelFrame ---
+from tkinter import ttk as standard_ttk 
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 import os
 import sys
 import requests
-import json
+# import json # REMOVIDO
 import webbrowser
 import platform
 import csv
@@ -30,29 +31,30 @@ except ImportError:
     messagebox.showerror("Erro de Arquivo", "Arquivo 'calculadora_core.py' não encontrado.\n\nCertifique-se que ele está na mesma pasta que 'testesimulacao.py'.")
     sys.exit()
 
+# --- NOVA IMPORTAÇÃO DO FIREBASE ---
+try:
+    import firebase_manager as fm
+except ImportError:
+    messagebox.showerror("Erro de Arquivo", "Arquivo 'firebase_manager.py' não encontrado.\n\nCertifique-se que ele está na mesma pasta.")
+    sys.exit()
+
+
 import shutil
-# --- IMPORTAÇÕES DO LOCUTOR (VOZ NATURAL EDGE) ---
-import asyncio              # Necessário para o edge-tts
-from edge_tts import Communicate  # O motor de voz do Edge
-import pygame               # NOVO PLAYER DE ÁUDIO (substitui playsound)
-# (O 'os' e 'traceback' já foram importados acima)
 
 # --- Variáveis Globais e Constantes ---
-APP_VERSION = "4.0.1-Crash-Fix" # (Versão de teste, pode mudar)
+APP_VERSION = "5.1.11" # ATUALIZADO (Fix TclError com .winfo_exists() e unbind manual)
 VERSION_URL = "https://raw.githubusercontent.com/gabriielgouvea/veritas/main/version.json"
 
 # CORREÇÃO: Define o caminho da pasta 'data'
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_FOLDER_PATH = os.path.join(SCRIPT_PATH, "data") # Pasta para todos os dados
-CONSULTORES_JSON_PATH = os.path.join(DATA_FOLDER_PATH, "consultores.json") # Caminho completo do JSON
-FOLGAS_JSON_PATH = os.path.join(DATA_FOLDER_PATH, "folgas.json")
-LOCUTOR_JSON_PATH = os.path.join(DATA_FOLDER_PATH, "locutor_mensagens.json") # <-- NOVO JSON
 
 calculo_resultado = {}
 consultor_selecionado = None
 consultor_logado_data = {}
 PROFILE_PIC_SIZE = (96, 96)
 ICON_SIZE = (22, 22)
+LOGO_MARCA_SIZE = (150, 150) # Novo: Tamanho para logos de marcas
 
 PLANOS = {
     'Anual (12 meses)': {'valor': 359.00, 'duracao': 12},
@@ -66,75 +68,6 @@ MOTIVOS_CANCELAMENTO = [
     "MUDEI DE ENDEREÇO",
     "OUTROS"
 ]
-
-# --- Lógica de Dados ---
-def carregar_consultores():
-    try:
-        with open(CONSULTORES_JSON_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        messagebox.showerror("Erro Crítico", f"{CONSULTORES_JSON_PATH} não encontrado!")
-        if not os.path.exists(DATA_FOLDER_PATH):
-            os.makedirs(DATA_FOLDER_PATH)
-            messagebox.showinfo("Pasta Criada", f"Pasta 'data' não encontrada. Criei ela para você.\n\nPor favor, adicione o 'consultores.json' e os ícones lá.")
-        return []
-    except Exception as e:
-        messagebox.showerror("Erro ao Ler JSON", f"Erro ao ler {CONSULTORES_JSON_PATH}: {e}")
-        return []
-
-def salvar_consultores(lista_consultores):
-    try:
-        with open(CONSULTORES_JSON_PATH, 'w', encoding='utf-8') as f:
-            json.dump(lista_consultores, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        messagebox.showerror("Erro ao Salvar", f"Não foi possível salvar {CONSULTORES_JSON_PATH}: {e}")
-        return False
-
-def carregar_folgas():
-    """Lê o arquivo JSON de folgas."""
-    try:
-        with open(FOLGAS_JSON_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except Exception as e:
-        messagebox.showerror("Erro ao Ler Folgas", f"Erro ao ler {FOLGAS_JSON_PATH}: {e}")
-        return {}
-
-def salvar_folgas(dados_folgas):
-    """Salva os dados de folgas no arquivo JSON."""
-    try:
-        with open(FOLGAS_JSON_PATH, 'w', encoding='utf-8') as f:
-            json.dump(dados_folgas, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        messagebox.showerror("Erro ao Salvar Folgas", f"Não foi possível salvar {FOLGAS_JSON_PATH}: {e}")
-        return False
-
-# --- NOVAS FUNÇÕES DE DADOS (LOCUTOR) ---
-def carregar_mensagens_locutor():
-    """Lê o arquivo JSON de mensagens do locutor."""
-    try:
-        with open(LOCUTOR_JSON_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        # Se não achar, cria um arquivo com uma lista vazia
-        salvar_mensagens_locutor([])
-        return []
-    except Exception as e:
-        messagebox.showerror("Erro ao Ler Mensagens", f"Erro ao ler {LOCUTOR_JSON_PATH}: {e}")
-        return []
-
-def salvar_mensagens_locutor(lista_mensagens):
-    """Salva a lista de mensagens no arquivo JSON."""
-    try:
-        with open(LOCUTOR_JSON_PATH, 'w', encoding='utf-8') as f:
-            json.dump(lista_mensagens, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        messagebox.showerror("Erro ao Salvar Mensagens", f"Não foi possível salvar {LOCUTOR_JSON_PATH}: {e}")
-        return False
 
 # --- FUNÇÕES AUXILIARES (Lógica e Validação) ---
 def check_for_updates():
@@ -230,6 +163,15 @@ def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagam
 class App(ttk.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # --- Conectar ao Firebase (MUDANÇA CRÍTICA) ---
+        # Conecta ANTES de carregar qualquer outra coisa
+        self.firebase_connected = fm.init_firebase()
+        if not self.firebase_connected:
+            # O init_firebase() já mostra o erro.
+            # Apenas fechamos o app se a conexão falhar.
+            self.destroy()
+            return
 
         # --- Variáveis de Estilo ---
         self.FONT_MAIN = ("Helvetica", 11)
@@ -244,22 +186,22 @@ class App(ttk.Window):
         self.COLOR_TEXT_LIGHT = "#212529"
 
         # --- Configuração da Janela ---
-        self.title(f"Veritas | Sistema de Gestão v{APP_VERSION} (TESTE LOCUTOR EDGE)") # Mudei o título
+        self.title(f"Veritas | Sistema de Gestão v{APP_VERSION}")
         self.state('zoomed')
         self.resizable(True, True)
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
-        # --- Carregar Dados dos Consultores ---
-        self.lista_completa_consultores = carregar_consultores()
+        # --- Carregar Dados dos Consultores (MUDANÇA) ---
+        # Agora carrega do Firebase
+        self.lista_completa_consultores = fm.carregar_consultores()
         self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
-        
-        # --- Carregar Dados do Locutor ---
-        self.lista_mensagens_locutor = carregar_mensagens_locutor()
 
-        # --- Dados das Folgas (carregados pela tela) ---
-        self.dados_folgas = {} # Agora é um dicionário
+        # --- Dados das Folgas e Marcas (carregados pela tela) ---
+        self.dados_folgas = {} 
+        self.dados_marcas = {} # NOVO
+        self.listbox_frame = None # NOVO: Para rastrear o ScrolledFrame (FIX TclError)
 
         # --- Carregar Imagens ---
         self.load_images()
@@ -271,14 +213,14 @@ class App(ttk.Window):
         self.sidebar_frame = ttk.Frame(self, style='Sidebar.TFrame', width=300)
         self.sidebar_frame.grid(row=0, column=0, sticky="ns")
         self.sidebar_frame.grid_propagate(False)
-        self.sidebar_frame.grid_rowconfigure(9, weight=1) # Ajustado para novo layout
+        # self.sidebar_frame.grid_rowconfigure(9, weight=1) # Ajustado abaixo
 
         # --- ÁREA DE CONTEÚDO PRINCIPAL ---
         self.main_frame = ttk.Frame(self)
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
 
         # --- WIDGETS DA SIDEBAR ---
-        self.create_sidebar_widgets()
+        self.create_sidebar_widgets() # Isso agora tem o novo botão
 
         # --- FOOTER ---
         footer_frame = ttk.Frame(self)
@@ -287,14 +229,8 @@ class App(ttk.Window):
         self.footer_label.pack(fill='x')
 
         # --- Iniciar na Tela de Login ---
-        self.show_login_view()
+        self.show_login_view() # A lógica de login foi alterada
         self.style.theme_use('flatly')
-        
-        # --- Inicializar o Mixer de Áudio (para o Locutor) ---
-        try:
-            pygame.mixer.init()
-        except Exception as e:
-            messagebox.showerror("Erro de Áudio", f"Não foi possível iniciar o mixer de áudio (Pygame).\n{e}")
 
 
     def load_images(self):
@@ -305,6 +241,14 @@ class App(ttk.Window):
         draw.ellipse((0, 0, PROFILE_PIC_SIZE[0], PROFILE_PIC_SIZE[1]), fill='#cccccc')
         self.default_profile_photo = ImageTk.PhotoImage(placeholder_img)
         self.dev_preview_photo_tk = self.default_profile_photo
+        
+        # NOVO: Placeholder para logos de marcas (quadrado)
+        placeholder_logo = Image.new('RGBA', LOGO_MARCA_SIZE, (0,0,0,0))
+        draw = ImageDraw.Draw(placeholder_logo)
+        draw.rectangle((0, 0, LOGO_MARCA_SIZE[0], LOGO_MARCA_SIZE[1]), fill='#eeeeee')
+        self.default_logo_photo = ImageTk.PhotoImage(placeholder_logo)
+        self.dev_preview_logo_tk = self.default_logo_photo
+
 
         self.default_icon = ImageTk.PhotoImage(Image.new('RGBA', ICON_SIZE, (0,0,0,0)))
 
@@ -316,40 +260,25 @@ class App(ttk.Window):
             self.icon_folgas = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "days_off.png")).resize(ICON_SIZE))
             self.icon_updates = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "updates.png")).resize(ICON_SIZE))
             self.icon_developer = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "developer.png")).resize(ICON_SIZE))
-            # --- Ícone do Locutor (CARREGAMENTO REAL) ---
-            self.icon_locutor = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "microphone.png")).resize(ICON_SIZE))
-            
+            # --- NOVO ÍCONE ---
+            self.icon_liberacoes = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "entries.png")).resize(ICON_SIZE))
         except Exception as e:
             messagebox.showerror("Erro ao Carregar Ícones", f"Não foi possível carregar alguns ícones da pasta 'data'.\n\nVerifique se os ícones necessários estão na pasta 'data'.\n\nErro: {e}")
             self.icon_simulador = self.icon_comissao = self.icon_folgas = self.default_icon
-            self.icon_updates = self.icon_developer = self.icon_locutor = self.default_icon # Adicionado locutor ao fallback
+            self.icon_updates = self.icon_developer = self.icon_liberacoes = self.default_icon
 
         # --- *** CORREÇÃO: REDIMENSIONAR A LOGO *** ---
         try:
             img_logo_original = Image.open(os.path.join(DATA_FOLDER_PATH, "logo_completa.png"))
-
-            # Pega o tamanho original
             original_width, original_height = img_logo_original.size
-
-            # Define a largura máxima que queremos para a logo
             max_width = 500
-
-            # Calcula a nova altura mantendo a proporção
             ratio = max_width / float(original_width)
             new_height = int(float(original_height) * float(ratio))
-
-            # Redimensiona a imagem com alta qualidade (LANCZOS)
             img_logo_resized = img_logo_original.resize((max_width, new_height), Image.Resampling.LANCZOS)
-
-            # Converte para PhotoImage
             self.logo_login = ImageTk.PhotoImage(img_logo_resized)
-
         except Exception as e:
             print(f"AVISO: Não foi possível carregar a logo_completa.png: {e}")
             self.logo_login = None # Define como None se falhar
-
-        # (Linha do ícone 'fantasma' removida)
-
 
     def load_profile_picture(self, foto_path, size=PROFILE_PIC_SIZE, is_dev_preview=False):
         """Carrega e aplica a foto de perfil do consultor, agora circular."""
@@ -364,12 +293,17 @@ class App(ttk.Window):
                 img_profile = Image.open(path_completo)
 
             img_profile = self.fix_image_rotation(img_profile)
-
+            
+            # --- Cria máscara circular ---
             mask = Image.new("L", size, 0)
             draw = ImageDraw.Draw(mask)
             draw.ellipse((0, 0, size[0], size[1]), fill=255)
+            
+            # Redimensiona a imagem para caber no círculo
+            img_resized = ImageOps.fit(img_profile, size, Image.Resampling.LANCZOS)
+            
             img_circular = Image.new("RGBA", size, (0,0,0,0))
-            img_circular.paste(img_profile.resize(size), (0, 0), mask)
+            img_circular.paste(img_resized, (0, 0), mask)
             loaded_photo = ImageTk.PhotoImage(img_circular)
 
         except Exception as e:
@@ -381,10 +315,55 @@ class App(ttk.Window):
 
         if is_dev_preview:
             self.dev_preview_photo_tk = loaded_photo
-            self.dev_foto_label.config(image=self.dev_preview_photo_tk)
+            # Verifica se o widget dev_foto_label já existe antes de configurar
+            if hasattr(self, 'dev_foto_label') and self.dev_foto_label.winfo_exists():
+                self.dev_foto_label.config(image=self.dev_preview_photo_tk)
         else:
             self.profile_photo = loaded_photo
-            self.profile_pic_label.config(image=self.profile_photo)
+            if hasattr(self, 'profile_pic_label') and self.profile_pic_label.winfo_exists():
+                self.profile_pic_label.config(image=self.profile_photo)
+    
+    # --- NOVA FUNÇÃO PARA CARREGAR LOGOS ---
+    def load_image_no_circular(self, foto_path, size=LOGO_MARCA_SIZE, is_dev_preview=False, is_marca_logo=False):
+        """Carrega uma imagem (logo) sem a máscara circular, apenas redimensiona."""
+        
+        # --- INÍCIO DA CORREÇÃO Errno 2 ---
+        # Se o caminho da foto estiver vazio, não tente abri-lo.
+        if not foto_path:
+            loaded_photo = self.default_logo_photo
+        # --- FIM DA CORREÇÃO ---
+        else: # O 'try' original agora está dentro de um 'else'
+            try:
+                path_completo = os.path.join(DATA_FOLDER_PATH, foto_path)
+                if not os.path.exists(path_completo):
+                    raise FileNotFoundError
+
+                img_logo = Image.open(path_completo)
+                img_logo = self.fix_image_rotation(img_logo)
+                
+                # Redimensiona mantendo a proporção (fit)
+                img_logo.thumbnail(size, Image.Resampling.LANCZOS)
+                
+                # Cria um fundo transparente para centralizar
+                img_final = Image.new("RGBA", size, (0,0,0,0))
+                offset = ((size[0] - img_logo.width) // 2, (size[1] - img_logo.height) // 2)
+                img_final.paste(img_logo, offset)
+                
+                loaded_photo = ImageTk.PhotoImage(img_final)
+
+            except Exception as e:
+                print(f"Erro ao carregar logo {foto_path}: {e}")
+                # Retorna o placeholder quadrado
+                loaded_photo = self.default_logo_photo
+
+        if is_dev_preview: # Para o popup de "Gerenciar Marcas"
+            self.dev_preview_logo_tk = loaded_photo
+            if hasattr(self, 'dev_marca_logo_label') and self.dev_marca_logo_label.winfo_exists():
+                self.dev_marca_logo_label.config(image=self.dev_preview_logo_tk)
+        elif is_marca_logo: # Para a aba "Liberações"
+            self.marca_logo_tk = loaded_photo
+            if hasattr(self, 'liberacoes_logo_label') and self.liberacoes_logo_label.winfo_exists():
+                self.liberacoes_logo_label.config(image=self.marca_logo_tk)
 
     def fix_image_rotation(self, img):
         """Lê os dados EXIF de uma imagem e a rotaciona corretamente."""
@@ -431,7 +410,8 @@ class App(ttk.Window):
         self.consultant_label.grid(row=1, column=0, pady=(0, 5))
 
         self.trocar_consultor_button = ttk.Button(self.profile_frame, text="Fazer Login",
-                                                  command=self.show_login_view, style='Link.TButton')
+                                                command=lambda: self.show_login_view(force_dev_login=False), # MUDANÇA: Usa lambda
+                                                style='Link.TButton')
         self.trocar_consultor_button.grid(row=2, column=0, pady=(0, 10))
 
         ttk.Separator(self.sidebar_frame).grid(row=1, column=0, sticky='ew', padx=10, pady=10)
@@ -452,16 +432,17 @@ class App(ttk.Window):
             self.nav_buttons[value] = btn
 
         # --- BOTÕES DO MENU ATUALIZADOS ---
-        # (Ordem corrigida conforme sua solicitação)
         create_nav_button(2, "Simulador", "simulador", self.icon_simulador)
         create_nav_button(3, "Calculadora Comissão", "comissao", self.icon_comissao)
         create_nav_button(4, "Folgas", "folgas", self.icon_folgas)
-        create_nav_button(5, "Locutor", "locutor", self.icon_locutor) # <-- LINHA 5
-        create_nav_button(6, "Área do Desenvolvedor", "developer", self.icon_developer) # <-- LINHA 6
-        create_nav_button(7, "Verificar Atualizações", "updates", self.icon_updates) # <-- LINHA 7
+        # --- NOVO BOTÃO ---
+        create_nav_button(5, "Liberações", "liberacoes", self.icon_liberacoes)
+        # --- BOTÕES REORDENADOS ---
+        create_nav_button(6, "Área do Desenvolvedor", "developer", self.icon_developer)
+        create_nav_button(7, "Verificar Atualizações", "updates", self.icon_updates)
 
-        self.sidebar_frame.grid_rowconfigure(8, weight=1) # <-- LINHA 8
-        ttk.Separator(self.sidebar_frame).grid(row=9, column=0, sticky='sew', padx=10, pady=10) # <-- LINHA 9
+        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Ajusta o peso
+        ttk.Separator(self.sidebar_frame).grid(row=9, column=0, sticky='sew', padx=10, pady=10) # Ajusta a linha
 
 
     def on_nav_select(self):
@@ -473,17 +454,14 @@ class App(ttk.Window):
             if hasattr(self, '_last_selected_nav'): self.nav_var.set(self._last_selected_nav)
             else: self.nav_var.set("")
         elif view_name == "developer":
-            pin_ok = self.show_developer_login()
+            # CORREÇÃO: Passar o parâmetro 'force' para o login
+            pin_ok = self.show_developer_login(force_pin=False) 
             if pin_ok:
                 self.show_view("developer_area")
                 self._last_selected_nav = "developer_area"
             else:
                 if hasattr(self, '_last_selected_nav'): self.nav_var.set(self._last_selected_nav)
                 else: self.nav_var.set("")
-        # --- Lógica 'locutor' simplificada ---
-        elif view_name == "locutor":
-            self.show_view(view_name)
-            self._last_selected_nav = view_name
         else:
             self.show_view(view_name)
             self._last_selected_nav = view_name # Guarda a última seleção válida
@@ -494,27 +472,64 @@ class App(ttk.Window):
 
     def show_view(self, view_name):
         """Limpa o frame principal e carrega a nova 'tela'."""
+        
+        # --- INÍCIO DA CORREÇÃO TclError v5.1.11 ---
+        # Desvincula manualmente os eventos problemáticos do ScrolledFrame
+        # ANTES de destruí-lo.
+        if hasattr(self, 'listbox_frame') and self.listbox_frame:
+            try:
+                # Checa se o widget "ainda está vivo" antes de mexer nele
+                if self.listbox_frame.winfo_exists(): 
+                    self.listbox_frame.unbind("<Enter>")
+                    self.listbox_frame.unbind("<Leave>")
+                    # O container é um widget filho, também precisa ser checado
+                    if self.listbox_frame.container.winfo_exists():
+                        self.listbox_frame.container.unbind("<Configure>")
+            except Exception as e:
+                # Isso pode falhar se o widget já estiver sendo destruído,
+                # mas o objetivo é tentar de qualquer forma.
+                print(f"Aviso: Tentativa de desvincular ScrolledFrame falhou (normal ao fechar): {e}")
+        # --- FIM DA CORREÇÃO ---
+
         for widget in self.main_frame.winfo_children():
             widget.destroy()
+            
+        # Reseta o ponteiro para o ScrolledFrame
+        self.listbox_frame = None 
 
         # --- DICIONÁRIO DE VIEWS ATUALIZADO ---
         view_creators = {
             "simulador": self.create_cancellation_view,
             "comissao": self.create_comissao_view,
             "folgas": self.create_folgas_view,
-            "developer_area": self.create_developer_area_view,
-            "locutor": self.create_locutor_view # <-- ADICIONADO
+            "liberacoes": self.create_liberacoes_view, # --- NOVA VIEW ---
+            "developer_area": self.create_developer_area_view
         }
 
         creator_func = view_creators.get(view_name)
         if creator_func:
             creator_func()
 
-    def show_login_view(self):
-        """Mostra a tela de login, escondendo a sidebar."""
+    def show_login_view(self, force_dev_login=False):
+        """Mostra a tela de login, escondendo a sidebar. (LÓGICA ALTERADA)"""
         self.sidebar_frame.grid_remove()
+        
+        # --- INÍCIO DA CORREÇÃO TclError v5.1.11 ---
+        if hasattr(self, 'listbox_frame') and self.listbox_frame:
+            try:
+                if self.listbox_frame.winfo_exists(): 
+                    self.listbox_frame.unbind("<Enter>")
+                    self.listbox_frame.unbind("<Leave>")
+                    if self.listbox_frame.container.winfo_exists():
+                        self.listbox_frame.container.unbind("<Configure>")
+            except Exception as e:
+                print(f"Aviso: Tentativa de desvincular ScrolledFrame (login) falhou: {e}")
+        # --- FIM DA CORREÇÃO ---
+        
         for widget in self.main_frame.winfo_children():
             widget.destroy()
+            
+        self.listbox_frame = None
 
         login_container = ttk.Frame(self.main_frame)
         login_container.pack(expand=True)
@@ -527,13 +542,46 @@ class App(ttk.Window):
             # Senão, mostre o texto original como fallback
             ttk.Label(login_container, text="Sistema Veritas", font=self.FONT_TITLE_LOGIN).pack(pady=(0, 25))
 
+        # --- *** INÍCIO DA NOVA LÓGICA DE LOGIN *** ---
+        # Se a lista de consultores estiver VAZIA, ou se fomos forçados
+        # RECARREGA OS CONSULTORES AQUI PARA GARANTIR
+        self.lista_completa_consultores = fm.carregar_consultores()
+        self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
+        
+        if not self.lista_completa_consultores or force_dev_login:
+            ttk.Label(login_container, text="Nenhum consultor cadastrado.", font=self.FONT_MAIN).pack(pady=(0, 10))
+            ttk.Label(login_container, text="Acesse a Área do Desenvolvedor para começar.", font=self.FONT_MAIN).pack(pady=(0, 15))
+            
+            def on_dev_login_forced():
+                pin_ok = self.show_developer_login(force_pin=True) # Força o popup de PIN
+                if pin_ok:
+                    # Se o PIN estiver correto, mostramos a sidebar e a área dev
+                    self.sidebar_frame.grid()
+                    self.nav_var.set("developer") # Ativa o botão
+                    self._last_selected_nav = "developer_area"
+                    self.show_view("developer_area")
+                else:
+                    # Se errar o PIN, continua na tela de login
+                    pass 
+            
+            ttk.Button(login_container, text="Acessar Área do Desenvolvedor", 
+                       command=on_dev_login_forced, 
+                       style='primary.TButton', width=35).pack(pady=10, ipady=5)
+            return # Não mostra o login normal
+        # --- *** FIM DA NOVA LÓGICA DE LOGIN *** ---
+            
+        # Se a lista NÃO está vazia, mostra o login normal:
         form_frame = ttk.Frame(login_container)
         form_frame.pack(pady=10)
 
-        ttk.Label(form_frame, text="Selecione seu nome:", font=self.FONT_MAIN).pack(anchor='w')
+        ttk.Label(form_frame, text="Selecione ou digite seu nome:", font=self.FONT_MAIN).pack(anchor='w')
 
         self.combo_consultor_login = ttk.Combobox(form_frame, values=self.nomes_consultores, width=35, font=self.FONT_MAIN, state="readonly")
         self.combo_consultor_login.pack(pady=(5, 15))
+        
+        # --- CORREÇÃO 1: Definir o combobox como vazio ---
+        self.combo_consultor_login.set("") # Não seleciona o primeiro nome
+        
 
         def on_login():
             global consultor_selecionado, consultor_logado_data
@@ -636,7 +684,14 @@ class App(ttk.Window):
 
         if not matricula or not nome_cliente: messagebox.showerror("Erro", "Preencha a Matrícula e o Nome do Cliente."); return
         linha_proxima_parcela = ""
-        if calculo_resultado['valor_proxima_parcela'] > 0: linha_proxima_parcela = (f"- Próxima parcela: R$ {calculo_resultado['valor_proxima_parcela']:.2f} (dia {calculo_resultado['vencimento_proxima']})\n")
+        
+        # --- INÍCIO DA CORREÇÃO ---
+        if calculo_resultado['valor_proxima_parcela'] > 0:
+            # Pega a string já formatada da lógica de cálculo (ex: "R$ 359.00 (referente a hoje - 06/11/2025)")
+            texto_parcela_formatado = calculo_resultado['linha_mensalidade_a_vencer']
+            linha_proxima_parcela = (f"- Próxima parcela: {texto_parcela_formatado}\n")
+        # --- FIM DA CORREÇÃO ---
+            
         texto_formatado = (f"*INFORMAÇÕES CANCELAMENTO*\n\n- Nome: {nome_cliente}\n- Matricula: {matricula}\n\n*💸 VALORES*\n- Parcelas vencidas: R$ {calculo_resultado['valor_atrasado']:.2f} ({calculo_resultado['parcelas_atrasadas_qtd']} Parcelas)\n{linha_proxima_parcela}- Valor da multa: R$ {calculo_resultado['valor_multa']:.2f} (10% de {calculo_resultado['meses_para_multa']} Meses)\n> TOTAL A SER PAGO: *R$ {calculo_resultado['total_a_pagar']:.2f}*\n\nApós o cancelamento, *seu acesso permanecerá ativo até*: {calculo_resultado['data_acesso_final'].strftime('%d/%m/%Y')}")
         self.clipboard_clear(); self.clipboard_append(texto_formatado)
         self.show_toast("Texto Copiado!", "Detalhes do cancelamento copiados com sucesso.")
@@ -739,7 +794,8 @@ class App(ttk.Window):
         self.placeholder_label = ttk.Label(self.frame_resultado, text="O resultado aparecerá aqui...", font=self.FONT_MAIN, style="secondary.TLabel")
         self.placeholder_label.pack(expand=True)
 
-        self.frame_whatsapp = ttk.LabelFrame(self.frame_resultado, text=" Ações Finais ", padding=(15, 10))
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        self.frame_whatsapp = standard_ttk.LabelFrame(self.frame_resultado, text=" Ações Finais ", padding=(15, 10))
 
         vcmd_matricula = (self.register(validar_matricula), '%P')
         ttk.Label(self.frame_whatsapp, text="Matrícula:").grid(row=0, column=1, sticky="w", pady=4)
@@ -839,9 +895,9 @@ class App(ttk.Window):
         frame_upload.pack(side='top', fill='x', pady=(0, 10))
 
         btn_upload = ttk.Button(frame_upload, text="Fazer Upload do PDF de Fechamento",
-                                command=self.processar_pdf_comissao,
-                                style='primary.TButton',
-                                width=40)
+                                  command=self.processar_pdf_comissao,
+                                  style='primary.TButton',
+                                  width=40)
         btn_upload.pack(side='left', ipady=5, pady=5)
 
         self.lbl_pdf_selecionado = ttk.Label(frame_upload, text="Nenhum arquivo selecionado.", style='secondary.TLabel')
@@ -891,7 +947,7 @@ class App(ttk.Window):
             self.update_idletasks()
             # Mostra o erro
             messagebox.showerror("Erro ao Processar PDF",
-                                 f"Ocorreu um erro ao ler o arquivo:\n\n{e}\n\nTraceback:\n{traceback.format_exc()}")
+                               f"Ocorreu um erro ao ler o arquivo:\n\n{e}\n\nTraceback:\n{traceback.format_exc()}")
             # Limpa o frame de resultados
             for widget in self.frame_resultado_comissao.container.winfo_children():
                 widget.destroy()
@@ -927,11 +983,12 @@ class App(ttk.Window):
 
         frame_info = ttk.Frame(container, bootstyle='info', padding=10)
         frame_info.pack(fill='x', pady=5)
-        ttk.Label(frame_info, text=f"Fechamento: {operador}    |    Período: {periodo}",
+        ttk.Label(frame_info, text=f"Fechamento: {operador}   |   Período: {periodo}",
                   font=self.FONT_BOLD, bootstyle='inverse-info').pack()
 
         # --- Seção 1: Resumo do Cálculo ---
-        frame_resumo = ttk.LabelFrame(container, text=" Resumo do Cálculo de Comissão ", padding=15)
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_resumo = standard_ttk.LabelFrame(container, text=" Resumo do Cálculo de Comissão ", padding=15)
         frame_resumo.pack(fill='x', pady=10)
 
         # Criar 4 colunas para os Metrics
@@ -961,7 +1018,8 @@ class App(ttk.Window):
         m4.grid(row=0, column=3, padx=5, sticky='ew')
 
         # --- Seção 2: Resumo de Vendas ---
-        frame_vendas = ttk.LabelFrame(container, text=" Resumo de Vendas e Atendimentos ", padding=15)
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_vendas = standard_ttk.LabelFrame(container, text=" Resumo de Vendas e Atendimentos ", padding=15)
         frame_vendas.pack(fill='x', expand=True, pady=10)
 
         resumo = resultados.get("resumo_vendas", {})
@@ -986,7 +1044,8 @@ class App(ttk.Window):
         tree_vendas.pack(fill='x', expand=True)
 
         # --- Seção 3: Detalhes das Deduções ---
-        frame_deducoes = ttk.LabelFrame(container, text=" Detalhamento das Deduções Encontradas ", padding=15)
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_deducoes = standard_ttk.LabelFrame(container, text=" Detalhamento das Deduções Encontradas ", padding=15)
         frame_deducoes.pack(fill='x', expand=True, pady=10)
 
         detalhes = resultados.get('detalhes', {})
@@ -1006,7 +1065,7 @@ class App(ttk.Window):
                 tree_deduc.insert('', 'end', values=(nome, formatar_reais(valor)))
             tree_deduc.pack(fill='x', expand=True)
 
-    # --- TELA: FOLGAS (REESCRITA PARA USAR JSON) ---
+    # --- TELA: FOLGAS (MUDANÇA: LÊ DO FIREBASE) ---
 
     def get_folgas_por_data(self, data_obj):
         """Função HElPER. Retorna uma lista de nomes em folga para uma data específica."""
@@ -1029,7 +1088,7 @@ class App(ttk.Window):
         return folgas_lista
 
     def create_folgas_view(self):
-        """Cria a tela de Folgas (lendo do folgas.json)."""
+        """Cria a tela de Folgas (lendo do Firebase)."""
         # *** CORREÇÃO DE LAYOUT: Configurar o grid do self.main_frame ***
         self.main_frame.grid_rowconfigure(1, weight=1) # Faz a linha 1 (resultados) expandir
         self.main_frame.grid_columnconfigure(0, weight=1) # Faz a coluna 0 expandir
@@ -1041,10 +1100,11 @@ class App(ttk.Window):
         # *** CORREÇÃO DE LAYOUT: MUDADO PARA GRID ***
         frame_consulta.grid(row=0, column=0, sticky='new')
 
-        # 1. Carregar os dados
-        self.dados_folgas = carregar_folgas()
+        # 1. Carregar os dados (MUDANÇA)
+        self.dados_folgas = fm.carregar_folgas() # <-- MUDANÇA AQUI
+        
         if not self.dados_folgas:
-            msg = "Nenhum dado de folga cadastrado.\n\nVá para a Área do Desenvolvedor para adicionar as folgas."
+            msg = "Nenhum dado de folga cadastrado na nuvem.\n\nVá para a Área do Desenvolvedor para adicionar as folgas."
             # Coloca a mensagem no frame de consulta mesmo
             ttk.Label(frame_consulta, text=msg, style='secondary.TLabel', font=self.FONT_MAIN).pack(expand=True)
             # Esconde o frame de resultado que não será criado
@@ -1056,7 +1116,8 @@ class App(ttk.Window):
         hoje_formatado = hoje_obj.strftime("%d/%m/%Y")
 
         # 2. Folgas de Hoje
-        frame_hoje = ttk.LabelFrame(frame_consulta, text=" Folgas de Hoje ", padding=(15, 10))
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_hoje = standard_ttk.LabelFrame(frame_consulta, text=" Folgas de Hoje ", padding=(15, 10))
         frame_hoje.pack(fill='x', expand=True, side='top', pady=(0, 5))
 
         folgas_hoje_lista = self.get_folgas_por_data(hoje_obj)
@@ -1066,7 +1127,8 @@ class App(ttk.Window):
         ttk.Label(frame_hoje, text=f"Consultores: {folgas_hoje_str}", font=self.FONT_MAIN).pack(anchor='w', pady=(5,0))
 
         # 3. NOVO: Folgas de Amanhã (Recurso 7)
-        frame_amanha = ttk.LabelFrame(frame_consulta, text=" Folgas de Amanhã ", padding=(15, 10))
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_amanha = standard_ttk.LabelFrame(frame_consulta, text=" Folgas de Amanhã ", padding=(15, 10))
         frame_amanha.pack(fill='x', expand=True, side='top', pady=5)
 
         amanha_obj = hoje_obj + relativedelta(days=1)
@@ -1078,7 +1140,8 @@ class App(ttk.Window):
         ttk.Label(frame_amanha, text=f"Consultores: {folgas_amanha_str}", font=self.FONT_MAIN).pack(anchor='w', pady=(5,0))
 
         # 4. Consultar por Consultor
-        frame_buscar = ttk.LabelFrame(frame_consulta, text=" Consultar por Consultor ", padding=(15, 10))
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_buscar = standard_ttk.LabelFrame(frame_consulta, text=" Consultar por Consultor ", padding=(15, 10))
         frame_buscar.pack(fill='x', expand=True, pady=5, side='top')
 
         ttk.Label(frame_buscar, text="Selecione o Consultor:").pack(anchor='w', side='left', padx=(0, 10))
@@ -1099,7 +1162,8 @@ class App(ttk.Window):
         btn_ver_tabela.pack(side='right', padx=10)
 
         # 5. NOVO: Consultar por Data (Recurso 5)
-        frame_buscar_data = ttk.LabelFrame(frame_consulta, text=" Consultar por Data ", padding=(15, 10))
+        # --- CORREÇÃO: Usando standard_ttk.LabelFrame ---
+        frame_buscar_data = standard_ttk.LabelFrame(frame_consulta, text=" Consultar por Data ", padding=(15, 10))
         frame_buscar_data.pack(fill='x', expand=True, pady=5, side='top')
 
         ttk.Label(frame_buscar_data, text="Digite a Data (dd/mm/aaaa):").pack(anchor='w', side='left', padx=(0, 10))
@@ -1217,10 +1281,119 @@ class App(ttk.Window):
 
         tree_folgas.pack(fill='both', expand=True)
 
-    # --- ÁREA DO DESENVOLVEDOR ---
-    def show_developer_login(self):
-        """Mostra um popup para o login na área do desenvolvedor.
-           Retorna True se o login for bem-sucedido, False caso contrário."""
+    # --- TELA: LIBERAÇÕES (TOTALMENTE REESCRITA) ---
+    def create_liberacoes_view(self):
+        """Cria a nova tela de Liberações por Marca (v5.1.6 - Scroll Fixo)."""
+        ttk.Label(self.main_frame, text="Controle de Liberações Gerais", font=self.FONT_TITLE).pack(pady=(0, 10), anchor='w')
+
+        # --- Frame Superior: Seleção ---
+        frame_selecao = ttk.Frame(self.main_frame)
+        frame_selecao.pack(fill='x', pady=(0, 15), anchor='w')
+
+        ttk.Label(frame_selecao, text="Selecione a Marca:", font=self.FONT_BOLD).pack(side='left', padx=(0, 10))
+
+        # Carrega os dados das marcas
+        self.dados_marcas = fm.carregar_marcas()
+        nomes_marcas = sorted(list(self.dados_marcas.keys()))
+
+        combo_marcas = ttk.Combobox(frame_selecao, values=nomes_marcas, state="readonly", width=40, font=self.FONT_MAIN)
+        combo_marcas.pack(side='left')
+
+        # --- Frame de Conteúdo (Logo e Lista) ---
+        frame_conteudo = ttk.Frame(self.main_frame)
+        frame_conteudo.pack(fill='both', expand=True)
+        frame_conteudo.grid_rowconfigure(0, weight=1)
+        frame_conteudo.grid_columnconfigure(1, weight=1) # Coluna da lista expande
+
+        # --- Sub-Frame Esquerda (Logo e Data) ---
+        frame_logo = ttk.Frame(frame_conteudo, padding=(10, 0))
+        frame_logo.grid(row=0, column=0, sticky='n', padx=(0, 20))
+        
+        # Placeholder da Logo
+        self.marca_logo_tk = self.default_logo_photo # Inicia com o placeholder
+        self.liberacoes_logo_label = ttk.Label(frame_logo, image=self.marca_logo_tk)
+        self.liberacoes_logo_label.pack(pady=(10, 10))
+
+        # Placeholder da Data
+        self.liberacoes_data_label = ttk.Label(frame_logo, text="Selecione uma marca", style='secondary.TLabel', font=self.FONT_SMALL)
+        self.liberacoes_data_label.pack(pady=10)
+
+        # --- Sub-Frame Direita (Lista de Nomes) ---
+        frame_lista = ttk.Frame(frame_conteudo)
+        frame_lista.grid(row=0, column=1, sticky='nsew')
+        
+        ttk.Label(frame_lista, text="Pessoas Autorizadas:", font=self.FONT_BOLD).pack(anchor='w', pady=(0,5))
+        
+        # Este é o widget que precisa rolar
+        # --- CORREÇÃO TclError: Armazena a referência ---
+        self.listbox_frame = ScrolledFrame(frame_lista, autohide=True, bootstyle='secondary-rounded')
+        self.listbox_frame.pack(fill='both', expand=True)
+        
+        # --- Lógica de Seleção ---
+        def on_marca_select(event=None):
+            marca_selecionada = combo_marcas.get()
+            
+            # Limpa a lista antiga
+            for widget in self.listbox_frame.container.winfo_children():
+                widget.destroy()
+
+            # Se "Selecione uma marca", limpa a tela
+            if not marca_selecionada or marca_selecionada == "Selecione uma marca":
+                # --- CORREÇÃO Errno 2: Chama a função com caminho vazio ---
+                self.load_image_no_circular("", size=LOGO_MARCA_SIZE, is_marca_logo=True) 
+                self.liberacoes_data_label.config(text="Selecione uma marca")
+                
+                label_vazia = ttk.Label(self.listbox_frame.container, text="Selecione uma marca para ver a lista.", style='secondary.TLabel')
+                label_vazia.pack(padx=10, pady=10, anchor='nw') # VOLTA AO .pack()
+                return
+
+            # Pega os dados da marca
+            dados_marca = self.dados_marcas.get(marca_selecionada)
+            if not dados_marca:
+                return
+            
+            # 1. Atualiza a Logo
+            logo_path = dados_marca.get("logo_path", "")
+            self.load_image_no_circular(logo_path, size=LOGO_MARCA_SIZE, is_marca_logo=True)
+
+            # 2. Atualiza a Data de Atualização
+            data_att = dados_marca.get("ultima_atualizacao", "Sem data")
+            self.liberacoes_data_label.config(text=f"Lista atualizada em: {data_att}")
+
+            # 3. Atualiza a Lista de Nomes (AGORA EM 1 COLUNA)
+            pessoas_sorted = sorted(dados_marca.get("pessoas", []), key=str.lower) # Ordena alfabeticamente
+            
+            if not pessoas_sorted:
+                label_vazia = ttk.Label(self.listbox_frame.container, text="Nenhuma pessoa cadastrada para esta marca.")
+                label_vazia.pack(padx=10, pady=10, anchor='nw')
+            else:
+                for i, nome in enumerate(pessoas_sorted, 1):
+                    linha_texto = f"{i}. {nome}"
+                    label_nome = ttk.Label(self.listbox_frame.container, text=linha_texto, font=self.FONT_MAIN)
+                    label_nome.pack(padx=10, pady=2, anchor='nw') # .pack() de novo
+                    
+        combo_marcas.bind("<<ComboboxSelected>>", on_marca_select)
+        
+        # Define o placeholder
+        if nomes_marcas:
+            combo_marcas['values'] = ["Selecione uma marca"] + nomes_marcas
+            combo_marcas.set("Selecione uma marca")
+        else:
+            combo_marcas.set("Nenhuma marca cadastrada")
+            combo_marcas.config(state='disabled')
+        
+        on_marca_select() # Chama uma vez para limpar a tela
+        # --- Fim da Correção ---
+
+
+    # --- ÁREA DO DESENVOLVEDOR (MUDANÇA CRÍTICA: ABAS) ---
+    def show_developer_login(self, force_pin=False):
+        """Mostra um popup para o login na área do desenvolvedor."""
+        
+        if not force_pin:
+             pin_correto = "8274"
+        else:
+             pin_correto = "8274" 
 
         self.pin_success = False
 
@@ -1233,7 +1406,10 @@ class App(ttk.Window):
         container = ttk.Frame(popup, padding=20)
         container.pack(fill='both', expand=True)
 
-        ttk.Label(container, text="Digite o PIN para acessar a Área do Desenvolvedor:", font=self.FONT_MAIN).pack(pady=(0, 10))
+        if force_pin:
+             ttk.Label(container, text="PIN de Primeiro Acesso:", font=self.FONT_MAIN).pack(pady=(0, 10))
+        else:
+             ttk.Label(container, text="Digite o PIN para acessar a Área do Desenvolvedor:", font=self.FONT_MAIN).pack(pady=(0, 10))
 
         pin_entry_var = StringVar()
         pin_entry = ttk.Entry(container, width=20, show="*", textvariable=pin_entry_var)
@@ -1241,7 +1417,7 @@ class App(ttk.Window):
         pin_entry.focus_set()
 
         def verify_pin():
-            if pin_entry_var.get() == "8274":
+            if pin_entry_var.get() == pin_correto:
                 self.pin_success = True
                 popup.destroy()
             else:
@@ -1255,11 +1431,31 @@ class App(ttk.Window):
 
         return self.pin_success
 
+    # --- INÍCIO DAS MUDANÇAS CRÍTICAS ---
+
     def create_developer_area_view(self):
-        """Cria a tela da Área do Desenvolvedor com funcionalidade."""
+        """Cria a tela da Área do Desenvolvedor (AGORA COM ABAS)"""
         ttk.Label(self.main_frame, text="Área do Desenvolvedor", font=self.FONT_TITLE).pack(pady=(0, 10), anchor='w')
 
-        pw = Panedwindow(self.main_frame, orient='horizontal')
+        # 1. Cria o Notebook (o gerenciador de abas)
+        notebook = ttk.Notebook(self.main_frame)
+        notebook.pack(fill='both', expand=True)
+
+        # 2. Cria os frames para cada aba
+        tab_consultores = ttk.Frame(notebook, padding=10)
+        tab_marcas = ttk.Frame(notebook, padding=10)
+        
+        notebook.add(tab_consultores, text=' Gerenciar Consultores ')
+        notebook.add(tab_marcas, text=' Gerenciar Marcas ')
+
+        # 3. Preenche cada aba
+        self.create_dev_tab_consultores(tab_consultores)
+        self.create_dev_tab_marcas(tab_marcas)
+
+
+    def create_dev_tab_consultores(self, parent_frame):
+        """Cria o conteúdo da aba 'Gerenciar Consultores'."""
+        pw = ttk.Panedwindow(parent_frame, orient='horizontal') 
         pw.pack(fill='both', expand=True)
 
         # --- Lado Esquerdo: Lista de Consultores ---
@@ -1290,7 +1486,9 @@ class App(ttk.Window):
         ttk.Label(frame_form, text="Editar Consultor", font=self.FONT_BOLD).pack(anchor='w')
 
         ttk.Label(frame_form, text="Foto de Perfil:").pack(anchor='w', pady=(10, 2))
-        self.dev_foto_label = ttk.Label(frame_form, image=self.default_profile_photo)
+        
+        self.dev_foto_label = ttk.Label(frame_form, image=self.default_profile_photo, background=self.COLOR_SIDEBAR_LIGHT)
+        
         self.dev_foto_label.pack(anchor='w', pady=5)
         ttk.Button(frame_form, text="Fazer Upload de Nova Foto...", command=self.dev_fazer_upload).pack(anchor='w', pady=5)
 
@@ -1304,32 +1502,180 @@ class App(ttk.Window):
         self.dev_foto_path_entry = ttk.Entry(frame_form, width=50, font=self.FONT_MAIN, textvariable=self.dev_foto_path_var, state='readonly')
         self.dev_foto_path_entry.pack(anchor='w', fill='x', pady=5)
 
-        ttk.Button(frame_form, text="Salvar Alterações", style="primary.TButton", command=self.dev_salvar_alteracoes).pack(anchor='w', pady=20)
+        ttk.Button(frame_form, text="Salvar Alterações na Nuvem", style="primary.TButton", command=self.dev_salvar_alteracoes).pack(anchor='w', pady=20)
 
         self.dev_folgas_button = ttk.Button(frame_form, text="Ajustar Folgas",
                                             command=self.show_folgas_popup,
                                             style="info.TButton",
                                             state='disabled')
         self.dev_folgas_button.pack(anchor='w', pady=5, ipady=4)
-
+        
+        # Confia na lista carregada durante o login
         self.populate_consultor_tree()
+        
+
+    def create_dev_tab_marcas(self, parent_frame):
+        """Cria o conteúdo da aba 'Gerenciar Marcas'."""
+        pw = ttk.Panedwindow(parent_frame, orient='horizontal')
+        pw.pack(fill='both', expand=True)
+
+        # --- Lado Esquerdo: Lista de Marcas ---
+        frame_lista = ttk.Frame(pw, padding=10)
+        pw.add(frame_lista, weight=1)
+
+        ttk.Label(frame_lista, text="Marcas Cadastradas", font=self.FONT_BOLD).pack(anchor='w')
+
+        # Treeview para Marcas
+        cols = ('nome_marca', 'data_att', 'qtd_pessoas')
+        self.dev_tree_marcas = ttk.Treeview(frame_lista, columns=cols, show='headings', height=15, selectmode='browse')
+        self.dev_tree_marcas.heading('nome_marca', text='Nome da Marca')
+        self.dev_tree_marcas.heading('data_att', text='Última Atualização')
+        self.dev_tree_marcas.heading('qtd_pessoas', text='Qtd. Pessoas')
+        self.dev_tree_marcas.column('nome_marca', width=200)
+        self.dev_tree_marcas.column('data_att', width=120, anchor='center')
+        self.dev_tree_marcas.column('qtd_pessoas', width=80, anchor='center')
+        self.dev_tree_marcas.pack(fill='both', expand=True, pady=10)
+        
+        # Botões
+        frame_lista_botoes = ttk.Frame(frame_lista)
+        frame_lista_botoes.pack(fill='x', pady=5)
+        
+        ttk.Button(frame_lista_botoes, text="Adicionar Nova", style="success.TButton", 
+                   command=self.dev_adicionar_marca).pack(side='left', padx=5)
+                   
+        self.dev_btn_editar_marca = ttk.Button(frame_lista_botoes, text="Editar/Ver Pessoas", style="primary.Outline.TButton", 
+                                               command=self.show_marca_popup, state='disabled')
+        self.dev_btn_editar_marca.pack(side='left', padx=5)
+
+        self.dev_btn_excluir_marca = ttk.Button(frame_lista_botoes, text="Excluir", style="danger.Outline.TButton",
+                                                command=self.dev_excluir_marca, state='disabled')
+        self.dev_btn_excluir_marca.pack(side='left', padx=5)
+
+        # Evento de seleção
+        self.dev_tree_marcas.bind('<<TreeviewSelect>>', self.on_dev_tree_marcas_select)
+        
+        # Carrega os dados na Treeview
+        self.populate_marcas_tree()
+    
 
     def populate_consultor_tree(self):
-        """Limpa e preenche a Treeview com os dados atuais."""
+        """(CORRIGIDO v5.0.7) Limpa e preenche a Treeview de Consultores."""
+        
+        # 1. Limpa a lista antiga
+        if not hasattr(self, 'dev_tree'): return # Segurança
         for item in self.dev_tree.get_children():
             self.dev_tree.delete(item)
 
+        # 2. Atualiza a variável de nomes (para o login DA PRÓXIMA VEZ)
+        self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
+        
+        # 3. Desenha a nova lista na Treeview
         for consultor in self.lista_completa_consultores:
             self.dev_tree.insert('', 'end', values=(consultor['nome'], consultor['foto_path']))
 
-        self.dev_nome_var.set("")
-        self.dev_foto_path_var.set("")
+        # 4. Limpa o formulário da direita
+        if hasattr(self, 'dev_nome_var'):
+            self.dev_nome_var.set("")
+        if hasattr(self, 'dev_foto_path_var'):
+            self.dev_foto_path_var.set("")
         self.load_profile_picture("", size=PROFILE_PIC_SIZE, is_dev_preview=True)
-        # Desabilita o botão de folgas
+        
         if hasattr(self, 'dev_folgas_button'):
             self.dev_folgas_button.config(state='disabled')
+    
+    # --- NOVAS FUNÇÕES PARA GERENCIAR MARCAS ---
+    
+    def populate_marcas_tree(self):
+        """Carrega dados do Firebase e preenche a Treeview de Marcas."""
+        # 1. Limpa a lista antiga
+        if not hasattr(self, 'dev_tree_marcas'): return # Segurança
+        for item in self.dev_tree_marcas.get_children():
+            self.dev_tree_marcas.delete(item)
+            
+        # 2. Carrega os dados mais recentes
+        self.dados_marcas = fm.carregar_marcas()
+        
+        # 3. Preenche a Treeview
+        for nome_marca, dados in sorted(self.dados_marcas.items()):
+            data_att = dados.get('ultima_atualizacao', 'N/A')
+            qtd_pessoas = len(dados.get('pessoas', []))
+            self.dev_tree_marcas.insert('', 'end', values=(nome_marca, data_att, qtd_pessoas))
+            
+        # 4. Desabilita botões
+        self.on_dev_tree_marcas_select()
 
-    # --- Funções da Área do Desenvolvedor ---
+    def on_dev_tree_marcas_select(self, event=None):
+        """Habilita/desabilita botões de marca ao selecionar."""
+        if not hasattr(self, 'dev_tree_marcas'): return
+        
+        if not self.dev_tree_marcas.focus():
+            self.dev_btn_editar_marca.config(state='disabled')
+            self.dev_btn_excluir_marca.config(state='disabled')
+        else:
+            self.dev_btn_editar_marca.config(state='normal')
+            self.dev_btn_excluir_marca.config(state='normal')
+            
+    def dev_adicionar_marca(self):
+        """Adiciona uma nova marca padrão ao Firebase."""
+        novo_nome = "NOVA MARCA"
+        
+        # 1. Recarrega para checagem
+        self.dados_marcas = fm.carregar_marcas()
+        
+        # 2. Checa se já existe
+        if novo_nome in self.dados_marcas:
+            messagebox.showwarning("Erro", "Já existe um 'NOVA MARCA'. Renomeie-a antes de adicionar outra.")
+            return
+            
+        # 3. Cria a nova marca
+        self.dados_marcas[novo_nome] = {
+            "logo_path": "default_profile.png", # Usa um placeholder
+            "ultima_atualizacao": date.today().strftime("%d/%m/%Y"),
+            "pessoas": []
+        }
+        
+        # 4. Salva no Firebase
+        if fm.salvar_marcas(self.dados_marcas):
+            self.show_toast("Sucesso", "Nova marca criada.")
+            self.populate_marcas_tree() # Atualiza a lista
+            # Tenta selecionar o novo item
+            try:
+                for item in self.dev_tree_marcas.get_children():
+                    if self.dev_tree_marcas.item(item, 'values')[0] == novo_nome:
+                        self.dev_tree_marcas.selection_set(item)
+                        self.dev_tree_marcas.focus(item)
+                        break
+            except:
+                pass
+        else:
+            messagebox.showerror("Erro de Firebase", "Não foi possível salvar a nova marca.")
+
+    def dev_excluir_marca(self):
+        """Exclui a marca selecionada."""
+        selected_iid = self.dev_tree_marcas.focus()
+        if not selected_iid:
+            return
+            
+        nome_marca = self.dev_tree_marcas.item(selected_iid, 'values')[0]
+        
+        if not messagebox.askyesno("Confirmar Exclusão", f"Tem certeza que deseja excluir a marca:\n\n{nome_marca}\n\nTodas as pessoas cadastradas nela serão perdidas."):
+            return
+            
+        # 1. Carrega dados recentes
+        self.dados_marcas = fm.carregar_marcas()
+        
+        # 2. Remove (pop) a marca do dicionário
+        if nome_marca in self.dados_marcas:
+            self.dados_marcas.pop(nome_marca)
+        
+        # 3. Salva a lista modificada
+        if fm.salvar_marcas(self.dados_marcas):
+            self.show_toast("Excluído", f"Marca '{nome_marca}' removida.")
+            self.populate_marcas_tree() # Atualiza a lista
+        else:
+            messagebox.showerror("Erro de Firebase", "Não foi possível excluir a marca.")
+
+    # --- Funções da Área do Desenvolvedor (Consultores) ---
 
     def on_dev_tree_select(self, event=None):
         """Chamado quando um item é selecionado na Treeview."""
@@ -1346,9 +1692,14 @@ class App(ttk.Window):
         self.load_profile_picture(foto_path, size=PROFILE_PIC_SIZE, is_dev_preview=True)
         self.dev_folgas_button.config(state='normal') # Habilita o botão de folgas
 
-    def dev_fazer_upload(self):
-        """Abre a janela de diálogo para o upload de uma nova foto."""
+    def dev_fazer_upload(self, is_marca_upload=False, parent_popup=None):
+        """Abre a janela de diálogo para o upload de uma nova foto. (ATUALIZADO)"""
+        
+        # Define o "pai" do filedialog para que ele apareça na frente do popup
+        parent = parent_popup if parent_popup else self
+        
         filepath = filedialog.askopenfilename(
+            parent=parent, # <--- NOVO
             title="Selecionar foto",
             filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os arquivos", "*.*")]
         )
@@ -1357,15 +1708,46 @@ class App(ttk.Window):
 
         filename = os.path.basename(filepath)
         dest_path = os.path.join(DATA_FOLDER_PATH, filename)
-
+        
+        try:
+            # Verifica se a origem e o destino são o MESMO arquivo
+            if os.path.abspath(filepath) == os.path.abspath(dest_path):
+                self.show_toast("Foto Selecionada", f"A imagem {filename} já estava na pasta 'data'.")
+                # Não precisa copiar, apenas atualiza o formulário
+                if is_marca_upload:
+                    self.dev_marca_logo_path_var.set(filename)
+                    self.load_image_no_circular(filename, size=LOGO_MARCA_SIZE, is_dev_preview=True)
+                else:
+                    self.dev_foto_path_var.set(filename)
+                    self.load_profile_picture(filename, size=PROFILE_PIC_SIZE, is_dev_preview=True)
+                return 
+        except Exception as e:
+            print(f"Erro ao checar caminhos: {e}")
+            
         try:
             shutil.copy(filepath, dest_path)
-            self.dev_foto_path_var.set(filename)
-            self.load_profile_picture(filename, size=PROFILE_PIC_SIZE, is_dev_preview=True)
+            
+            # Atualiza o formulário correto
+            if is_marca_upload:
+                self.dev_marca_logo_path_var.set(filename)
+                self.load_image_no_circular(filename, size=LOGO_MARCA_SIZE, is_dev_preview=True)
+            else:
+                self.dev_foto_path_var.set(filename)
+                self.load_profile_picture(filename, size=PROFILE_PIC_SIZE, is_dev_preview=True)
+                
             self.show_toast("Upload Concluído", f"Arquivo {filename} salvo em 'data'.")
 
+        except shutil.SameFileError:
+             # Segurança extra
+            if is_marca_upload:
+                self.dev_marca_logo_path_var.set(filename)
+                self.load_image_no_circular(filename, size=LOGO_MARCA_SIZE, is_dev_preview=True)
+            else:
+                self.dev_foto_path_var.set(filename)
+                self.load_profile_picture(filename, size=PROFILE_PIC_SIZE, is_dev_preview=True)
+            self.show_toast("Foto Selecionada", f"A imagem {filename} já estava na pasta 'data'.")
         except Exception as e:
-            messagebox.showerror("Erro no Upload", f"Não foi possível copiar o arquivo: {e}")
+            messagebox.showerror("Erro no Upload", f"Não foi possível copiar o arquivo: {e}", parent=parent)
 
     def dev_salvar_alteracoes(self):
         """Salva as mudanças feitas no formulário no consultor selecionado."""
@@ -1375,7 +1757,6 @@ class App(ttk.Window):
             return
 
         original_nome = self.dev_tree.item(selected_iid, 'values')[0]
-
         novo_nome = self.dev_nome_var.get()
         nova_foto = self.dev_foto_path_var.get()
 
@@ -1383,29 +1764,34 @@ class App(ttk.Window):
             messagebox.showwarning("Campo Vazio", "O nome do consultor não pode estar vazio.")
             return
 
-        # Atualiza a lista de dados
-        for consultor in self.lista_completa_consultores:
+        lista_atual_db = fm.carregar_consultores()
+        consultor_encontrado = False
+        for consultor in lista_atual_db:
             if consultor['nome'] == original_nome:
                 consultor['nome'] = novo_nome
                 consultor['foto_path'] = nova_foto
+                consultor_encontrado = True
                 break
 
-        # Salva no JSON e atualiza a UI
-        if salvar_consultores(self.lista_completa_consultores):
-            # Recarrega a lista de nomes principal (para o login)
-            self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
-            self.combo_consultor_login.config(values=self.nomes_consultores)
-
+        if not consultor_encontrado:
+            messagebox.showerror("Erro de Sincronia", f"O consultor '{original_nome}' não foi encontrado no DB. A lista pode estar desatualizada. Tentando recarregar...")
+            self.lista_completa_consultores = lista_atual_db
             self.populate_consultor_tree()
-            self.show_toast("Sucesso!", "Consultor atualizado.")
+            return
 
-            # ATUALIZA O JSON DE FOLGAS (se o nome mudou)
-            self.dados_folgas = carregar_folgas()
+        if fm.salvar_consultores(lista_atual_db):
+            self.lista_completa_consultores = lista_atual_db
+            self.populate_consultor_tree()
+            self.show_toast("Sucesso!", "Consultor atualizado na nuvem.")
+
+            self.dados_folgas = fm.carregar_folgas()
             if original_nome in self.dados_folgas and original_nome != novo_nome:
                 if messagebox.askyesno("Atualizar Folgas", f"Você renomeou '{original_nome}' para '{novo_nome}'.\n\nDeseja transferir os dados de folgas para o novo nome?"):
                     self.dados_folgas[novo_nome] = self.dados_folgas.pop(original_nome)
-                    salvar_folgas(self.dados_folgas)
+                    fm.salvar_folgas(self.dados_folgas)
                     self.show_toast("Sucesso!", "Folgas transferidas para o novo nome.")
+        else:
+            messagebox.showerror("Erro de Firebase", "Não foi possível salvar as alterações.")
 
 
     def dev_adicionar_novo(self):
@@ -1413,25 +1799,29 @@ class App(ttk.Window):
         novo_nome = "NOVO CONSULTOR"
         nova_foto = "default_profile.png"
 
-        if any(c['nome'] == novo_nome for c in self.lista_completa_consultores):
+        lista_atual_db = fm.carregar_consultores() 
+        
+        if any(c['nome'] == novo_nome for c in lista_atual_db):
             messagebox.showwarning("Erro", "Já existe um 'NOVO CONSULTOR'. Renomeie-o antes de adicionar outro.")
+            self.lista_completa_consultores = lista_atual_db
+            self.populate_consultor_tree() 
             return
 
-        self.lista_completa_consultores.append({"nome": novo_nome, "foto_path": nova_foto})
+        lista_atual_db.append({"nome": novo_nome, "foto_path": nova_foto})
 
-        if salvar_consultores(self.lista_completa_consultores):
-            # Recarrega a lista de nomes principal (para o login)
-            self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
-            self.combo_consultor_login.config(values=self.nomes_consultores)
-
-            self.populate_consultor_tree()
+        if fm.salvar_consultores(lista_atual_db):
+            self.lista_completa_consultores = lista_atual_db
+            self.populate_consultor_tree() 
             try:
                 last_item = self.dev_tree.get_children()[-1]
                 self.dev_tree.selection_set(last_item)
                 self.dev_tree.focus(last_item)
+                self.on_dev_tree_select() 
             except:
                 pass
             self.show_toast("Adicionado", "Novo consultor criado. Edite-o e salve.")
+        else:
+             messagebox.showerror("Erro de Firebase", "Não foi possível salvar o novo consultor.")
 
     def dev_excluir_selecionado(self):
         """Exclui o consultor selecionado da lista."""
@@ -1445,23 +1835,28 @@ class App(ttk.Window):
         if not messagebox.askyesno("Confirmar Exclusão", f"Tem certeza que deseja excluir o consultor:\n\n{original_nome}\n\nEsta ação não pode ser desfeita."):
             return
 
-        self.lista_completa_consultores = [c for c in self.lista_completa_consultores if c['nome'] != original_nome]
+        lista_atual_db = fm.carregar_consultores()
+        nova_lista_db = [c for c in lista_atual_db if c['nome'] != original_nome]
+        
+        if len(nova_lista_db) == len(lista_atual_db):
+            messagebox.showerror("Erro de Sincronia", f"O consultor '{original_nome}' não foi encontrado no DB. A lista pode estar desatualizada. Tentando recarregar...")
+            self.lista_completa_consultores = lista_atual_db
+            self.populate_consultor_tree()
+            return
 
-        if salvar_consultores(self.lista_completa_consultores):
-            # Recarrega a lista de nomes principal (para o login)
-            self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
-            self.combo_consultor_login.config(values=self.nomes_consultores)
-
+        if fm.salvar_consultores(nova_lista_db):
+            self.lista_completa_consultores = nova_lista_db
             self.populate_consultor_tree()
             self.show_toast("Excluído", f"{original_nome} foi removido.")
 
-            # Remove as folgas do JSON
-            self.dados_folgas = carregar_folgas()
+            self.dados_folgas = fm.carregar_folgas()
             if original_nome in self.dados_folgas:
                 if messagebox.askyesno("Remover Folgas", f"Deseja também remover as folgas cadastradas para '{original_nome}'?"):
                     self.dados_folgas.pop(original_nome)
-                    salvar_folgas(self.dados_folgas)
+                    fm.salvar_folgas(self.dados_folgas)
                     self.show_toast("Sucesso!", "Folgas removidas.")
+        else:
+            messagebox.showerror("Erro de Firebase", "Não foi possível excluir o consultor.")
 
     # --- POPUP DE GERENCIAR FOLGAS ---
     def show_folgas_popup(self):
@@ -1469,16 +1864,12 @@ class App(ttk.Window):
 
         selected_iid = self.dev_tree.focus()
         if not selected_iid:
-            return # Segurança, embora o botão deva estar desabilitado
+            return 
 
         consultor_nome = self.dev_tree.item(selected_iid, 'values')[0]
-
-        # Carrega os dados mais recentes
-        self.dados_folgas = carregar_folgas()
-        # Pega a lista de datas para este consultor (ou uma lista vazia)
+        self.dados_folgas = fm.carregar_folgas()
         lista_de_datas = self.dados_folgas.get(consultor_nome, [])
 
-        # --- Cria o Popup ---
         popup = Toplevel(self)
         popup.title(f"Ajustar Folgas: {consultor_nome}")
         self._center_popup(popup, 500, 400) # (popup, largura, altura)
@@ -1504,7 +1895,6 @@ class App(ttk.Window):
                 messagebox.showwarning("Data Inválida", "Digite a data completa (dd/mm/aaaa).", parent=popup)
                 return
             try:
-                # Valida a data
                 datetime.strptime(data_str, "%d/%m/%Y")
             except ValueError:
                 messagebox.showwarning("Data Inválida", "A data digitada não é válida.", parent=popup)
@@ -1524,16 +1914,14 @@ class App(ttk.Window):
         listbox_folgas = Listbox(container, height=10, font=self.FONT_MAIN, width=30)
         listbox_folgas.grid(row=1, column=0, sticky='nsew', pady=5)
 
-        # Scrollbar para a Listbox
         scrollbar = ttk.Scrollbar(container, orient='vertical', command=listbox_folgas.yview)
         scrollbar.grid(row=1, column=1, sticky='ns', pady=5)
         listbox_folgas.config(yscrollcommand=scrollbar.set)
 
-        # Preenche a lista com as datas salvas
         try:
             datas_ordenadas = sorted(lista_de_datas, key=lambda d: datetime.strptime(d.strip(), "%d/%m/%Y"))
         except ValueError:
-            datas_ordenadas = lista_de_datas # Se houver erro de formatação, não ordena
+            datas_ordenadas = lista_de_datas 
 
         for data in datas_ordenadas:
             listbox_folgas.insert(END, data)
@@ -1553,13 +1941,10 @@ class App(ttk.Window):
         btn_remove.pack(side='left')
 
         def on_save_folgas():
-            # Pega todas as datas da listbox
             nova_lista_de_datas = list(listbox_folgas.get(0, END))
-            # Atualiza o dicionário principal
             self.dados_folgas[consultor_nome] = nova_lista_de_datas
-            # Salva no arquivo JSON
-            if salvar_folgas(self.dados_folgas):
-                self.show_toast("Sucesso!", f"Folgas de {consultor_nome} salvas.")
+            if fm.salvar_folgas(self.dados_folgas):
+                self.show_toast("Sucesso!", f"Folgas de {consultor_nome} salvas na nuvem.")
                 popup.destroy()
             else:
                 messagebox.showerror("Erro", "Não foi possível salvar as folgas.", parent=popup)
@@ -1568,316 +1953,227 @@ class App(ttk.Window):
                                 style="success.TButton", command=on_save_folgas)
         btn_save.pack(side='right')
 
-    # --- TELA: LOCUTOR (TOTALMENTE MODIFICADA) ---
-    def create_locutor_view(self):
-        ttk.Label(self.main_frame, text="Locutor da Academia", font=self.FONT_TITLE).pack(pady=(0, 10), anchor='w')
-
-        # Cria um painel dividido verticalmente
-        pw_locutor = Panedwindow(self.main_frame, orient='vertical')
-        pw_locutor.pack(fill='both', expand=True)
-
-        # --- PAINEL DE CIMA: Mensagens Padrão ---
-        frame_padrao = ttk.LabelFrame(pw_locutor, text=" Mensagens Padrão (Gerenciável) ", padding=15)
-        pw_locutor.add(frame_padrao, weight=1) # Damos peso 1
-
-        frame_padrao.grid_rowconfigure(0, weight=1)
-        frame_padrao.grid_columnconfigure(0, weight=1)
-
-        # Lista (Treeview) de mensagens
-        cols = ('titulo')
-        self.locutor_tree = ttk.Treeview(frame_padrao, columns=cols, show='headings', height=5, selectmode='browse')
-        self.locutor_tree.heading('titulo', text='Título da Mensagem')
-        self.locutor_tree.column('titulo', width=400)
-        self.locutor_tree.grid(row=0, column=0, columnspan=4, sticky='nsew', pady=(0, 10))
+    # --- NOVO POPUP PARA GERENCIAR MARCAS (CORREÇÃO DE LAYOUT) ---
+    def show_marca_popup(self):
+        """Mostra um popup para gerenciar pessoas, logo e data de uma Marca."""
         
-        # Botões de Ação
-        btn_falar_selecionado = ttk.Button(frame_padrao, text="Falar Selecionado",
-                                          command=self.falar_mensagem_selecionada, 
-                                          style='primary.TButton')
-        btn_falar_selecionado.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
-        
-        btn_adicionar = ttk.Button(frame_padrao, text="Adicionar", 
-                                   command=self.adicionar_mensagem, 
-                                   style='success.Outline.TButton')
-        btn_adicionar.grid(row=1, column=1, padx=5, pady=5, sticky='ew')
-        
-        btn_editar = ttk.Button(frame_padrao, text="Editar", 
-                                command=self.editar_mensagem_selecionada, 
-                                style='info.Outline.TButton')
-        btn_editar.grid(row=1, column=2, padx=5, pady=5, sticky='ew')
-
-        btn_excluir = ttk.Button(frame_padrao, text="Excluir", 
-                                 command=self.excluir_mensagem_selecionada, 
-                                 style='danger.Outline.TButton')
-        btn_excluir.grid(row=1, column=3, padx=5, pady=5, sticky='ew')
-        
-        # Faz os botões expandirem igualmente
-        frame_padrao.grid_columnconfigure(0, weight=2) # Botão de falar é maior
-        frame_padrao.grid_columnconfigure(1, weight=1)
-        frame_padrao.grid_columnconfigure(2, weight=1)
-        frame_padrao.grid_columnconfigure(3, weight=1)
-
-
-        # --- PAINEL DE BAIXO: Mensagem Personalizada ---
-        frame_custom = ttk.LabelFrame(pw_locutor, text=" Mensagem Personalizada ", padding=15)
-        pw_locutor.add(frame_custom, weight=1) # Damos peso 1
-        
-        frame_custom.grid_rowconfigure(0, weight=1)
-        frame_custom.grid_columnconfigure(0, weight=1)
-
-        # Usamos ScrolledText para mensagens longas
-        self.entry_locutor = scrolledtext.ScrolledText(frame_custom, font=self.FONT_MAIN, height=3, width=80)
-        self.entry_locutor.grid(row=0, column=0, sticky='nsew', pady=(5, 10))
-
-        # --- LÓGICA DO PLACEHOLDER ---
-        placeholder_text = "Digite aqui..."
-        placeholder_color = 'gray'
-        default_fg_color = self.entry_locutor.cget('foreground') 
-
-        def add_placeholder(event=None):
-            if not self.entry_locutor.get("1.0", "end-1c").strip():
-                self.entry_locutor.delete("1.0", "end")
-                self.entry_locutor.insert("1.0", placeholder_text)
-                self.entry_locutor.config(foreground=placeholder_color)
-
-        def remove_placeholder(event=None):
-            if self.entry_locutor.get("1.0", "end-1c").strip() == placeholder_text:
-                self.entry_locutor.delete("1.0", "end")
-                self.entry_locutor.config(foreground=default_fg_color)
-
-        add_placeholder()
-        self.entry_locutor.bind("<FocusIn>", remove_placeholder)
-        self.entry_locutor.bind("<FocusOut>", add_placeholder)
-        
-        def falar_personalizado():
-            texto = self.entry_locutor.get("1.0", "end-1c").strip()
-            if texto == placeholder_text:
-                texto = "" 
-            self.falar_no_microfone(texto)
-            add_placeholder() # Garante que o placeholder volte depois de falar
-
-        btn_falar = ttk.Button(frame_custom, text="FALAR MENSAGEM PERSONALIZADA", 
-                               style="success.TButton", 
-                               command=falar_personalizado) # Comando atualizado
-        btn_falar.grid(row=1, column=0, sticky='ew', ipady=10)
-
-        # --- Preenche a lista de mensagens padrão ---
-        self.populate_locutor_tree()
-
-
-    # --- MÉTODOS DO LOCUTOR (NOVOS E MODIFICADOS) ---
-
-    def populate_locutor_tree(self):
-        """Limpa e preenche a Treeview com as mensagens do locutor."""
-        if not hasattr(self, 'locutor_tree'):
-            return # A tela do locutor ainda não foi criada
-            
-        for item in self.locutor_tree.get_children():
-            self.locutor_tree.delete(item)
-            
-        for mensagem in self.lista_mensagens_locutor:
-            # Insere o 'titulo' e usa o 'titulo' como iid (ID interno)
-            self.locutor_tree.insert('', 'end', iid=mensagem['titulo'], values=(mensagem['titulo'],))
-
-    def falar_mensagem_selecionada(self):
-        """Pega o texto da mensagem selecionada e o fala."""
-        selected_iid = self.locutor_tree.focus()
+        selected_iid = self.dev_tree_marcas.focus()
         if not selected_iid:
-            messagebox.showwarning("Nenhuma Seleção", "Por favor, selecione uma mensagem na lista para falar.")
-            return
-        
-        # Como o 'iid' é o 'titulo', podemos buscar na lista
-        for mensagem in self.lista_mensagens_locutor:
-            if mensagem['titulo'] == selected_iid:
-                self.falar_no_microfone(mensagem['texto']) # Chama a função principal de falar
-                return
-        
-        messagebox.showerror("Erro", "Não foi possível encontrar o texto da mensagem selecionada.")
-
-    def adicionar_mensagem(self):
-        """Chama o popup para adicionar uma nova mensagem."""
-        self.mostrar_popup_mensagem() # Chama sem argumento
-
-    def editar_mensagem_selecionada(self):
-        """Chama o popup para editar a mensagem selecionada."""
-        selected_iid = self.locutor_tree.focus()
-        if not selected_iid:
-            messagebox.showwarning("Nenhuma Seleção", "Por favor, selecione uma mensagem para editar.")
-            return
-        
-        # Encontra os dados da mensagem para enviar ao popup
-        for mensagem in self.lista_mensagens_locutor:
-            if mensagem['titulo'] == selected_iid:
-                self.mostrar_popup_mensagem(dados_mensagem=mensagem)
-                return
-
-    def excluir_mensagem_selecionada(self):
-        """Exclui a mensagem selecionada do JSON."""
-        selected_iid = self.locutor_tree.focus()
-        if not selected_iid:
-            messagebox.showwarning("Nenhuma Seleção", "Por favor, selecione uma mensagem para excluir.")
             return
             
-        if not messagebox.askyesno("Confirmar Exclusão", f"Tem certeza que deseja excluir a mensagem:\n\n'{selected_iid}'\n\nEsta ação não pode ser desfeita."):
+        nome_marca_original = self.dev_tree_marcas.item(selected_iid, 'values')[0]
+        
+        # Carrega os dados mais recentes
+        self.dados_marcas = fm.carregar_marcas()
+        dados_marca = self.dados_marcas.get(nome_marca_original)
+        
+        if not dados_marca:
+            messagebox.showerror("Erro", "Não foi possível encontrar os dados desta marca. A lista pode estar desatualizada.")
+            self.populate_marcas_tree()
             return
             
-        # Encontra e remove da lista
-        self.lista_mensagens_locutor = [msg for msg in self.lista_mensagens_locutor if msg['titulo'] != selected_iid]
-        
-        # Salva a nova lista no JSON
-        if salvar_mensagens_locutor(self.lista_mensagens_locutor):
-            self.show_toast("Sucesso", "Mensagem excluída.")
-            self.populate_locutor_tree() # Atualiza a lista na tela
-        else:
-            self.show_toast("Erro", "Não foi possível salvar a exclusão.", bootstyle='danger')
-            # Recarrega a lista original em caso de falha ao salvar
-            self.lista_mensagens_locutor = carregar_mensagens_locutor()
+        lista_de_pessoas = dados_marca.get("pessoas", [])
+        logo_path_atual = dados_marca.get("logo_path", "default_profile.png")
+        data_att_atual = dados_marca.get("ultima_atualizacao", date.today().strftime("%d/%m/%Y"))
 
-    def mostrar_popup_mensagem(self, dados_mensagem=None):
-        """Cria um popup para Adicionar ou Editar uma mensagem."""
-        
-        is_edit_mode = dados_mensagem is not None
-
+        # --- Cria o Popup ---
         popup = Toplevel(self)
-        popup.title("Editar Mensagem" if is_edit_mode else "Adicionar Nova Mensagem")
-        self._center_popup(popup, 600, 400) # (popup, largura, altura)
-        popup.grab_set()
-
-        container = ttk.Frame(popup, padding=20)
-        container.pack(fill='both', expand=True)
-
-        ttk.Label(container, text="Título (Nome curto para o botão):", font=self.FONT_BOLD).pack(anchor='w')
-        entry_titulo = ttk.Entry(container, font=self.FONT_MAIN, width=70)
-        entry_titulo.pack(fill='x', pady=(5, 15))
-
-        ttk.Label(container, text="Texto Completo (O que será falado):", font=self.FONT_BOLD).pack(anchor='w')
-        entry_texto = scrolledtext.ScrolledText(container, font=self.FONT_MAIN, height=5, width=70)
-        entry_texto.pack(fill='both', expand=True, pady=5)
+        popup.title(f"Editar Marca: {nome_marca_original}")
         
-        if is_edit_mode:
-            entry_titulo.insert(0, dados_mensagem['titulo'])
-            entry_texto.insert("1.0", dados_mensagem['texto'])
-            # Não permite editar o título (que é o ID)
-            entry_titulo.config(state='disabled') 
+        # --- !!! CORREÇÃO DE TAMANHO V5.1.2 !!! ---
+        self._center_popup(popup, 700, 650) # (popup, largura, altura)
+        
+        # --- Layout com Panedwindow ---
+        pw = ttk.Panedwindow(popup, orient='horizontal')
+        pw.pack(fill='both', expand=True)
 
-        def on_save():
-            novo_titulo = entry_titulo.get().strip()
-            novo_texto = entry_texto.get("1.0", "end-1c").strip()
+        # --- Painel Esquerdo: Detalhes da Marca ---
+        frame_detalhes = ttk.Frame(pw, padding=15)
+        pw.add(frame_detalhes, weight=1)
 
-            if not novo_titulo or not novo_texto:
-                messagebox.showwarning("Campos Vazios", "Título e Texto são obrigatórios.", parent=popup)
-                return
+        ttk.Label(frame_detalhes, text="Detalhes da Marca", font=self.FONT_BOLD).pack(anchor='w', pady=(0,10))
 
-            if is_edit_mode:
-                # Modo Edição: Apenas atualiza o texto
-                for msg in self.lista_mensagens_locutor:
-                    if msg['titulo'] == dados_mensagem['titulo']:
-                        msg['texto'] = novo_texto
-                        break
-            else:
-                # Modo Adicionar: Verifica se o título já existe
-                for msg in self.lista_mensagens_locutor:
-                    if msg['titulo'].lower() == novo_titulo.lower():
-                        messagebox.showwarning("Título Duplicado", "Já existe uma mensagem com esse título.", parent=popup)
-                        return
-                # Adiciona o novo
-                self.lista_mensagens_locutor.append({"titulo": novo_titulo, "texto": novo_texto})
+        # Logo
+        ttk.Label(frame_detalhes, text="Logo:").pack(anchor='w', pady=(5, 2))
+        self.dev_marca_logo_label = ttk.Label(frame_detalhes, image=self.default_logo_photo)
+        self.dev_marca_logo_label.pack(anchor='w', pady=5)
+        
+        # Passa 'popup' como pai para o filedialog
+        btn_upload_logo = ttk.Button(frame_detalhes, text="Fazer Upload de Nova Logo...", 
+                                     command=lambda: self.dev_fazer_upload(is_marca_upload=True, parent_popup=popup))
+        btn_upload_logo.pack(anchor='w', pady=5)
+
+        # Caminho da Logo (Entry)
+        ttk.Label(frame_detalhes, text="Caminho da Logo:").pack(anchor='w', pady=(10, 2))
+        self.dev_marca_logo_path_var = StringVar(value=logo_path_atual)
+        entry_logo_path = ttk.Entry(frame_detalhes, width=40, font=self.FONT_MAIN, 
+                                      textvariable=self.dev_marca_logo_path_var, state='readonly')
+        entry_logo_path.pack(anchor='w', fill='x', pady=5)
+        
+        # Nome da Marca (Entry)
+        ttk.Label(frame_detalhes, text="Nome da Marca:").pack(anchor='w', pady=(10, 2))
+        dev_marca_nome_var = StringVar(value=nome_marca_original)
+        entry_marca_nome = ttk.Entry(frame_detalhes, width=40, font=self.FONT_MAIN, 
+                                       textvariable=dev_marca_nome_var)
+        entry_marca_nome.pack(anchor='w', fill='x', pady=5)
+
+        # Data de Atualização (DateEntry)
+        ttk.Label(frame_detalhes, text="Data da Lista (enviada pela gerência):").pack(anchor='w', pady=(10, 2))
+        try:
+            data_obj_atual = datetime.strptime(data_att_atual, "%d/%m/%Y").date()
+        except:
+            data_obj_atual = date.today()
             
-            # Salva no JSON e atualiza a UI
-            if salvar_mensagens_locutor(self.lista_mensagens_locutor):
-                self.show_toast("Sucesso", "Mensagem salva.")
-                self.populate_locutor_tree()
+        entry_data_att = DateEntry(frame_detalhes, dateformat="%d/%m/%Y", startdate=data_obj_atual, bootstyle='primary')
+        entry_data_att.pack(anchor='w', fill='x', pady=5)
+        
+        # Carrega a logo atual
+        self.load_image_no_circular(logo_path_atual, size=LOGO_MARCA_SIZE, is_dev_preview=True)
+
+
+        # --- Painel Direito: Lista de Pessoas ---
+        # --- !!! CORREÇÃO DE LAYOUT v5.1.3: MUDANÇA DE .pack() para .grid() ---
+        frame_pessoas = ttk.Frame(pw, padding=15)
+        pw.add(frame_pessoas, weight=1)
+        
+        frame_pessoas.grid_rowconfigure(2, weight=1) # Linha 2 (Listbox) expande
+        frame_pessoas.grid_columnconfigure(0, weight=1)
+
+        # Título
+        ttk.Label(frame_pessoas, text="Pessoas Autorizadas", font=self.FONT_BOLD).grid(row=0, column=0, columnspan=2, sticky='w', pady=(0,10))
+
+        # Frame de Adicionar Pessoa
+        frame_add = ttk.Frame(frame_pessoas)
+        frame_add.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10)) # MUDANÇA: row=1
+        
+        entry_pessoa = ttk.Entry(frame_add, width=30, font=self.FONT_MAIN)
+        entry_pessoa.pack(side='left', fill='x', expand=True, padx=(0,10)) # .pack() aqui dentro está OK
+
+        def on_add_pessoa():
+            nome_str = entry_pessoa.get().strip().upper() # Padroniza para maiúsculas
+            if not nome_str: return
+            if nome_str in listbox_pessoas.get(0, END):
+                messagebox.showwarning("Nome Duplicado", "Este nome já está na lista.", parent=popup)
+                return
+            listbox_pessoas.insert(END, nome_str)
+            entry_pessoa.delete(0, END)
+            entry_pessoa.focus_set()
+            
+        entry_pessoa.bind("<Return>", lambda e: on_add_pessoa())
+        btn_add_pessoa = ttk.Button(frame_add, text="Adicionar", style="success.Outline.TButton", command=on_add_pessoa)
+        btn_add_pessoa.pack(side='left') # .pack() aqui dentro está OK
+
+        # Lista de Pessoas
+        listbox_pessoas = Listbox(frame_pessoas, height=15, font=self.FONT_MAIN, width=40)
+        listbox_pessoas.grid(row=2, column=0, sticky='nsew', pady=5) # MUDANÇA: row=2
+        scrollbar = ttk.Scrollbar(frame_pessoas, orient='vertical', command=listbox_pessoas.yview)
+        scrollbar.grid(row=2, column=1, sticky='ns', pady=5) # MUDANÇA: row=2
+        listbox_pessoas.config(yscrollcommand=scrollbar.set)
+        
+        for nome in sorted(lista_de_pessoas):
+            listbox_pessoas.insert(END, nome)
+        
+        # --- CORREÇÃO 4: Botão de Importar em Massa ---
+        frame_botoes_lista = ttk.Frame(frame_pessoas)
+        frame_botoes_lista.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(10,0)) # MUDANÇA: row=3
+
+        btn_remove_pessoa = ttk.Button(frame_botoes_lista, text="Remover Selecionado", 
+                                       style="danger.Outline.TButton", 
+                                       command=lambda: listbox_pessoas.delete(ANCHOR))
+        btn_remove_pessoa.pack(side='left')
+        
+        btn_importar_lista = ttk.Button(frame_botoes_lista, text="Importar Lista (.txt)", 
+                                        style="info.Outline.TButton", 
+                                        command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
+        btn_importar_lista.pack(side='left', padx=10)
+        
+        
+        # --- Botão de Salvar (no rodapé do popup) ---
+        frame_salvar = ttk.Frame(popup, padding=(15,10))
+        frame_salvar.pack(fill='x', side='bottom')
+        
+        def on_save_marca():
+            # 1. Coleta todos os dados
+            novo_nome_marca = dev_marca_nome_var.get().strip()
+            novo_logo_path = self.dev_marca_logo_path_var.get()
+            nova_data_att = entry_data_att.entry.get()
+            nova_lista_pessoas = list(listbox_pessoas.get(0, END))
+            
+            if not novo_nome_marca:
+                messagebox.showerror("Nome Vazio", "O nome da marca não pode estar vazio.", parent=popup)
+                return
+                
+            # 2. Carrega os dados mais recentes do DB
+            dados_marcas_db = fm.carregar_marcas()
+            
+            # 3. Remove a marca antiga (caso o nome tenha mudado)
+            if nome_marca_original != novo_nome_marca and nome_marca_original in dados_marcas_db:
+                dados_marcas_db.pop(nome_marca_original)
+                
+            # 4. Adiciona/Sobrescreve a marca com os dados novos
+            dados_marcas_db[novo_nome_marca] = {
+                "logo_path": novo_logo_path,
+                "ultima_atualizacao": nova_data_att,
+                "pessoas": nova_lista_pessoas
+            }
+            
+            # 5. Salva tudo de volta no Firebase
+            if fm.salvar_marcas(dados_marcas_db):
+                self.show_toast("Sucesso!", f"Marca '{novo_nome_marca}' salva na nuvem.")
+                self.populate_marcas_tree() # Atualiza a treeview de marcas
                 popup.destroy()
             else:
-                messagebox.showerror("Erro", "Não foi possível salvar a mensagem.", parent=popup)
-                # Recarrega a lista original
-                self.lista_mensagens_locutor = carregar_mensagens_locutor()
+                messagebox.showerror("Erro de Firebase", "Não foi possível salvar os dados da marca.", parent=popup)
 
+        btn_save_marca = ttk.Button(frame_salvar, text="Salvar Alterações e Fechar",
+                                    style="success.TButton", command=on_save_marca)
+        btn_save_marca.pack(side='right')
 
-        btn_save = ttk.Button(container, text="Salvar Mensagem", style="success.TButton", command=on_save)
-        btn_save.pack(side='right', pady=(15, 0))
-        btn_cancel = ttk.Button(container, text="Cancelar", style="secondary.Outline.TButton", command=popup.destroy)
-        btn_cancel.pack(side='right', padx=10, pady=(15, 0))
-
-
-    # --- MÉTODO DO LOCUTOR (NOVO: Pygame, Toque de Alerta e Repetição) ---
-    def falar_no_microfone(self, texto):
-        if not texto.strip():
-            messagebox.showwarning("Atenção", "O campo de texto está vazio.")
+    # --- NOVA FUNÇÃO DE IMPORTAÇÃO EM MASSA (CORREÇÃO 4) ---
+    def dev_importar_lista_pessoas(self, listbox_pessoas, parent_popup):
+        """Abre um seletor de arquivos para importar uma lista de nomes .txt."""
+        
+        filepath = filedialog.askopenfilename(
+            parent=parent_popup,
+            title="Selecionar arquivo .txt com nomes (um nome por linha)",
+            filetypes=[("Arquivos de Texto", "*.txt"), ("Todos os arquivos", "*.*")]
+        )
+        if not filepath:
             return
 
-        self.config(cursor="watch")
-        self.update_idletasks()
-
-        # Define a voz que queremos usar (Feminina, Brasil)
-        VOICE = "pt-BR-FranciscaNeural"
-        
-        # Define o nome do arquivo de fala temporário
-        temp_file = os.path.join(SCRIPT_PATH, "temp_locutor_audio.mp3")
-        
-        # Define o caminho do arquivo de alerta
-        alerta_file = os.path.join(DATA_FOLDER_PATH, "alerta.mp3")
-
-        # edge-tts é assíncrono, então precisamos de uma função async
-        # para *apenas gerar o arquivo*
-        async def _gerar_arquivo_fala():
-            print("Locutor: Gerando áudio com Edge-TTS...")
-            communicate = Communicate(texto, VOICE)
-            await communicate.save(temp_file)
-
         try:
-            # --- PASSO 1: Gerar o arquivo de fala ---
-            asyncio.run(_gerar_arquivo_fala())
+            # 1. Pega os nomes atuais na listbox
+            current_names = set(listbox_pessoas.get(0, END))
+            novos_nomes_adicionados = 0
             
-            # --- PASSO 2: Tocar a sequência com Pygame ---
+            # 2. Lê o arquivo
+            with open(filepath, 'r', encoding='utf-8') as f:
+                for line in f:
+                    nome_limpo = line.strip().upper()
+                    
+                    # 3. Adiciona apenas se for novo e não vazio
+                    if nome_limpo and nome_limpo not in current_names:
+                        listbox_pessoas.insert(END, nome_limpo)
+                        current_names.add(nome_limpo) # Adiciona ao set para evitar duplicatas do mesmo arquivo
+                        novos_nomes_adicionados += 1
             
-            # 2a. Tocar o alerta (se existir)
-            if os.path.exists(alerta_file):
-                print("Locutor: Tocando alerta...")
-                pygame.mixer.music.load(alerta_file)
-                pygame.mixer.music.play()
-                # Espera o som terminar
-                while pygame.mixer.music.get_busy():
-                    pygame.time.Clock().tick(10)
-            else:
-                print("Aviso: 'alerta.mp3' não encontrado na pasta 'data'. Pulando o toque.")
-            
-            # 2b. Tocar a fala (2x)
-            if not os.path.exists(temp_file):
-                raise FileNotFoundError("Arquivo de fala temporário não foi criado.")
-            
-            print("Locutor: Tocando fala (1/2)...")
-            pygame.mixer.music.load(temp_file)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-            
-            print("Locutor: Tocando fala (2/2)...")
-            pygame.mixer.music.play() # Só precisa tocar de novo
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-            
+            # 4. Mostra o resultado
+            messagebox.showinfo("Importação Concluída", 
+                                f"{novos_nomes_adicionados} novos nomes foram adicionados à lista.",
+                                parent=parent_popup)
+
         except Exception as e:
-            # Captura erros do asyncio, edge-tts ou pygame
-            print(f"Erro no processo de locução: {e}")
-            messagebox.showerror("Erro de Locutor", f"Não foi possível gerar ou tocar a voz.\n\nVerifique sua conexão com a internet.\n\nErro: {e}\n\n{traceback.format_exc()}")
-                
-        finally:
-            # --- PASSO 3: Limpar ---
-            # Libera o arquivo do mixer ANTES de tentar deletar
-            pygame.mixer.music.stop()
-            pygame.mixer.music.unload() 
-            
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except Exception as e:
-                    print(f"Aviso: Não foi possível remover o arquivo temporário: {e}")
-            
-            # Volta o cursor ao normal
-            self.config(cursor="") 
+            messagebox.showerror("Erro ao Importar",
+                                 f"Não foi possível ler o arquivo.\nVerifique se é um .txt válido.\n\nErro: {e}",
+                                 parent=parent_popup)
 
 # --- Bloco Principal ---
 if __name__ == "__main__":
     app = App(themename="flatly")
-    app.mainloop()
+    
+    # Se a conexão falhou, o __init__ terá retornado
+    # e a flag 'firebase_connected' não existirá ou será False
+    if getattr(app, 'firebase_connected', False):
+        app.mainloop()
+    else:
+        print("Falha ao iniciar o app (provável erro de Firebase). Fechando.")

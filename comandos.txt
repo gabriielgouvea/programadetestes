@@ -16,7 +16,7 @@ Para: APP_VERSION = "1.0.4"
 [ ] 3. Salvar o Arquivo: Salve todas as suas alterações no script Python.
 
 ✅ Fase 2: Gerar o Novo Arquivo Executável (.EXE)
-[ ] 1. Abrir o Terminal: Abra um terminal (como o do VS Code) na pasta raiz do seu projeto (ex: C:\programadetestes).
+[ ] 1. Abrir o Terminal: Abra um terminal (como o do VS Code) na pasta raiz do seu projeto (ex: C:\cancelamento).
 
 [ ] 2. Executar o PyInstaller: Rode o comando exato que já inclui seu arquivo de modelo (.docx).
 
@@ -77,5 +77,3 @@ Salve ("Commit") as alterações.
 [ ] 2. Verifique a Atualização: Clique no botão "Verificar Atualizações...".
 
 [ ] 3. Confirme o Resultado: Uma mensagem deve aparecer avisando que a nova versão 1.0.4 está disponível. Ao clicar "Sim", seu navegador deve abrir o link de download do GitHub.
-
-python -m PyInstaller Veritas.spec

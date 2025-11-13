@@ -5,14 +5,15 @@ Arquivo: main.py (O antigo simulacaocanciron.py)
 Descrição: Este é o arquivo principal que executa o aplicativo.
 Ele contém a classe App, gerencia a janela principal, a sidebar,
 o login e chama as 'Views' (telas) corretas.
-(v5.3.1 - Correção forçada de Path)
+(v5.6.2 - Readicionada a lista 'tracked_scrolled_frames' para corrigir crash)
 """
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 # Correção v5.1.15: Importa ToastNotification do local correto
 from ttkbootstrap.widgets import DateEntry, ToastNotification
-from ttkbootstrap.widgets.scrolled import ScrolledFrame # Importado do local correto
+# Importa o ScrolledFrame (ainda é usado pela ComissaoView e FolgasView)
+from ttkbootstrap.widgets.scrolled import ScrolledFrame 
 from tkinter import messagebox, Toplevel, Entry, Button, StringVar, \
     PhotoImage, Listbox, filedialog, END, ANCHOR
 # --- NOVA IMPORTAÇÃO ---
@@ -122,7 +123,10 @@ class App(ttk.Window):
         
         self.consultor_logado_data = {}
         
-        self.tracked_scrolled_frames = [] # Lista para rastrear ScrolledFrames
+        # --- ***** CORREÇÃO 1 (Início) ***** ---
+        # Readicionando a lista que "Comissão" e "Folgas" usam
+        self.tracked_scrolled_frames = []
+        # --- ***** CORREÇÃO 1 (Fim) ***** ---
 
         # --- Carregar Imagens ---
         self.load_images()
@@ -182,7 +186,7 @@ class App(ttk.Window):
             messagebox.showerror("Erro ao Carregar Ícones", f"Não foi possível carregar alguns ícones da pasta 'data'.\n\nErro: {e}")
             self.icon_simulador = self.icon_comissao = self.icon_folgas = self.default_icon
             self.icon_updates = self.icon_developer = self.icon_liberacoes = self.default_icon
-            self.icon_lostfound = self.default_icon # Define como padrão se falhar
+            self.icon_lostfound = self.default_icon
 
         try:
             img_logo_original = Image.open(os.path.join(DATA_FOLDER_PATH, "logo_completa.png"))
@@ -287,9 +291,9 @@ class App(ttk.Window):
                             anchor='w', compound='left', padding=(15, 10),
                             font=self.FONT_MAIN, borderwidth=0)
         style.map('Nav.Toolbutton',
-                    background=[('active', self.COLOR_BTN_HOVER_LIGHT),
-                                ('selected', self.COLOR_BTN_SELECTED_LIGHT)],
-                    foreground=[('selected', self.COLOR_TEXT_LIGHT)])
+                  background=[('active', self.COLOR_BTN_HOVER_LIGHT),
+                              ('selected', self.COLOR_BTN_SELECTED_LIGHT)],
+                  foreground=[('selected', self.COLOR_TEXT_LIGHT)])
 
     def create_nav_button(self, parent, row, text, value, icon, cmd):
         """Função helper para criar um botão de navegação da sidebar."""
@@ -316,8 +320,8 @@ class App(ttk.Window):
         self.consultant_label.grid(row=1, column=0, pady=(0, 5))
 
         self.trocar_consultor_button = ttk.Button(self.profile_frame, text="Fazer Login",
-                                                command=lambda: self.show_login_view(force_dev_login=False),
-                                                style='Link.TButton')
+                                                 command=lambda: self.show_login_view(force_dev_login=False),
+                                                 style='Link.TButton')
         self.trocar_consultor_button.grid(row=2, column=0, pady=(0, 10))
 
         ttk.Separator(self.sidebar_frame).grid(row=1, column=0, sticky='ew', padx=10, pady=10)
@@ -345,7 +349,7 @@ class App(ttk.Window):
             if hasattr(self, '_last_selected_nav'): self.nav_var.set(self._last_selected_nav)
             else: self.nav_var.set("")
         elif view_name == "developer":
-            pin_ok = self.show_developer_login(force_pin=False) 
+            pin_ok = self.show_developer_login(force_pin=False, pin_correto="8274") 
             if pin_ok:
                 self.show_view("developer_area")
                 self._last_selected_nav = "developer_area"
@@ -366,26 +370,14 @@ class App(ttk.Window):
         Limpa o frame principal e carrega a nova 'tela'.
         """
         
-        # 1. Desliga os eventos de ScrolledFrames (Correção TclError)
-        if hasattr(self, 'tracked_scrolled_frames'):
-            for frame in self.tracked_scrolled_frames:
-                try:
-                    if frame and frame.winfo_exists():
-                        frame.disable_scrolling()
-                        frame.unbind("<Enter>")
-                        frame.unbind("<Leave>")
-                        if hasattr(frame, 'container') and frame.container.winfo_exists():
-                            frame.container.unbind("<Configure>")
-                except Exception as e:
-                    print(f"Aviso: Tentativa de desativar scroll falhou: {e}")
-
-        # 2. Limpa a tela antiga
+        # 1. Destrói todos os widgets
         for widget in self.main_frame.winfo_children():
-            widget.destroy()
-            
-        self.tracked_scrolled_frames = [] # Limpa a lista de rastreamento
-
-        # 3. Cria a nova tela (View)
+            try:
+                widget.destroy()
+            except Exception as e:
+                pass 
+        
+        # 2. Cria a nova tela (View)
         if view_name == "simulador":
             SimuladorView(self, self.main_frame)
         
@@ -398,7 +390,6 @@ class App(ttk.Window):
         elif view_name == "liberacoes":
             LiberacoesView(self, self.main_frame)
         
-        # --- NOVA VIEW ---
         elif view_name == "achados":
             AchadosView(self, self.main_frame)
             
@@ -409,24 +400,13 @@ class App(ttk.Window):
         """Mostra a tela de login, escondendo a sidebar."""
         self.sidebar_frame.grid_remove()
         
-        # Desliga os ScrolledFrames (Correção TclError)
-        if hasattr(self, 'tracked_scrolled_frames'):
-            for frame in self.tracked_scrolled_frames:
-                try:
-                    if frame and frame.winfo_exists():
-                        frame.disable_scrolling()
-                        frame.unbind("<Enter>")
-                        frame.unbind("<Leave>")
-                        if hasattr(frame, 'container') and frame.container.winfo_exists():
-                            frame.container.unbind("<Configure>")
-                except Exception as e:
-                    print(f"Aviso: Tentativa de desativar scroll (login) falhou: {e}")
-        
+        # 1. Agora destrói todos os widgets
         for widget in self.main_frame.winfo_children():
-            widget.destroy()
+            try:
+                widget.destroy()
+            except Exception:
+                pass
             
-        self.tracked_scrolled_frames = []
-
         login_container = ttk.Frame(self.main_frame)
         login_container.pack(expand=True)
 
@@ -444,7 +424,7 @@ class App(ttk.Window):
             ttk.Label(login_container, text="Acesse a Área do Desenvolvedor para começar.", font=self.FONT_MAIN).pack(pady=(0, 15))
             
             def on_dev_login_forced():
-                pin_ok = self.show_developer_login(force_pin=True)
+                pin_ok = self.show_developer_login(force_pin=True, pin_correto="8274")
                 if pin_ok:
                     self.sidebar_frame.grid()
                     self.nav_var.set("developer")
@@ -506,14 +486,12 @@ class App(ttk.Window):
         popup.transient(self)
         popup.grab_set()
 
-    def show_developer_login(self, force_pin=False):
-        """Mostra um popup para o login na área do desenvolvedor."""
+    def show_developer_login(self, force_pin=False, pin_correto="8274"):
+        """
+        Mostra um popup para o login na área do desenvolvedor.
+        O 'pin_correto' agora é um parâmetro.
+        """
         
-        if not force_pin:
-             pin_correto = "8274"
-        else:
-             pin_correto = "8274" 
-
         self.pin_success = False
 
         popup = Toplevel(self)
@@ -526,7 +504,7 @@ class App(ttk.Window):
         container.pack(fill='both', expand=True)
 
         if force_pin:
-             ttk.Label(container, text="PIN de Primeiro Acesso:", font=self.FONT_MAIN).pack(pady=(0, 10))
+             ttk.Label(container, text="Digite o PIN de Administrador:", font=self.FONT_MAIN).pack(pady=(0, 10))
         else:
              ttk.Label(container, text="Digite o PIN para acessar a Área do Desenvolvedor:", font=self.FONT_MAIN).pack(pady=(0, 10))
 

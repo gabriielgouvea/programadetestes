@@ -4,7 +4,7 @@
 Arquivo: view_achados.py
 Descrição: Contém a classe AchadosView, que constrói e gerencia
 a nova tela de Achados e Perdidos.
-(v5.3.7 - Corrigido o AttributeError 'btn_cancelar')
+(v5.4.4 - Corrigido o bug do 'finally' no save_item)
 """
 
 import ttkbootstrap as ttk
@@ -163,11 +163,8 @@ class CadastroItemPopup(Toplevel):
         self.btn_salvar = ttk.Button(frame_botoes, text="Salvar Item", style='success.TButton', command=self.save_item, state='disabled')
         self.btn_salvar.grid(row=0, column=1, padx=10, ipady=5)
         
-        # --- ESTA É A CORREÇÃO ---
-        # Adicionado 'self.' ao 'btn_cancelar'
         self.btn_cancelar = ttk.Button(frame_botoes, text="Cancelar", style='light.TButton', command=self.on_close)
         self.btn_cancelar.grid(row=0, column=2, ipady=5)
-        # --- FIM DA CORREÇÃO ---
         
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -253,7 +250,7 @@ class CadastroItemPopup(Toplevel):
             self.entry_titulo.focus_set()
 
     def save_item(self):
-        # --- ESTA É A FUNÇÃO ATUALIZADA ---
+        # --- FUNÇÃO 'SAVE_ITEM' TOTALMENTE CORRIGIDA ---
         
         # 1. Pega os dados
         titulo = self.entry_titulo.get().strip()
@@ -273,7 +270,7 @@ class CadastroItemPopup(Toplevel):
             
         # 2. Desabilita botões e mostra cursor de espera
         self.btn_salvar.config(text="Salvando...", state='disabled')
-        self.btn_cancelar.config(state='disabled') # <-- AGORA FUNCIONA
+        self.btn_cancelar.config(state='disabled')
         self.app.config(cursor="watch")
         self.update_idletasks() # Força a atualização da UI
 
@@ -282,7 +279,7 @@ class CadastroItemPopup(Toplevel):
             foto_url = fm.upload_foto_item_imagekit(self.foto_capturada_pil, n_controle)
             
             if not foto_url:
-                # Erro já foi mostrado pelo firebase_manager
+                # O 'firebase_manager' já mostrou o popup de erro
                 raise Exception("Falha no upload da foto.")
 
             # 4. Prepara os dados para o RTDB
@@ -305,23 +302,18 @@ class CadastroItemPopup(Toplevel):
             
             # 5. Salva os dados no RTDB
             if not fm.salvar_novo_item_achado(item_data):
-                # Erro já foi mostrado pelo firebase_manager
+                # O 'firebase_manager' já mostrou o popup de erro
                 raise Exception("Falha ao salvar dados no RTDB.")
             
-            # 6. Sucesso!
+            # 6. SUCESSO!
             self.app.show_toast("Sucesso!", f"Item '{titulo}' cadastrado no Firebase.")
+            self.app.config(cursor="") # Volta o cursor ao normal
             self.on_close() # Fecha o popup
 
         except Exception as e:
+            # 7. FALHA
             print(f"Erro em save_item: {e}")
-            # Habilita os botões novamente se der erro
-            self.btn_salvar.config(text="Salvar Item", state='normal')
-            self.btn_cancelar.config(state='normal')
-            self.app.config(cursor="")
-
-        finally:
-            # Garante que os botões e cursor voltem ao normal
-            # (Mesmo que o código acima falhe, isso garante que o popup não trave)
+            # Reabilita os botões para o usuário tentar de novo
             self.btn_salvar.config(text="Salvar Item", state='normal')
             self.btn_cancelar.config(state='normal')
             self.app.config(cursor="")

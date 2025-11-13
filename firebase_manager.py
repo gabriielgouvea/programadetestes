@@ -3,7 +3,7 @@
 """
 Arquivo: firebase_manager.py
 Descrição: Gerencia toda a comunicação com o Firebase (RTDB) e ImageKit.io.
-(v5.4.2 - Correção final do upload para v4.2.0)
+(v5.4.3 - Correção final do 'dict' object, criando um objeto 'options' manual)
 """
 
 import firebase_admin
@@ -161,22 +161,24 @@ def upload_foto_item_imagekit(imagem_pil, n_controle):
         img_bytes = img_byte_arr.getvalue() # Pega os bytes crus
 
         # --- ESTA É A CORREÇÃO (v4.2.0) ---
-        # A v4.2.0 espera um dicionário 'options'
-        options = {
-            "folder": "achados_e_perdidos/",
-            "is_private_file": False
-        }
+        # 1. Criamos um objeto simples em tempo real
+        class OpcoesDeUpload:
+            pass
+            
+        options = OpcoesDeUpload()
+        options.folder = "achados_e_perdidos/"
+        options.is_private_file = False
+        # --- FIM DA CORREÇÃO ---
         
         # 2. Faz o upload passando o objeto
         upload_response = imagekit.upload(
             file=img_bytes,
             file_name=f"item_{n_controle}.jpg",
-            options=options # Passa o dicionário de opções
+            options=options # Passa o objeto de opções
         )
         
         # 3. A v4.2.0 retorna um objeto, então acessamos com .url
         return upload_response.url
-        # --- FIM DA CORREÇÃO ---
 
     except Exception as e:
         messagebox.showerror("Erro de Upload (ImageKit)", f"Não foi possível salvar a foto no ImageKit.\n\nErro: {e}")

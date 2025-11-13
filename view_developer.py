@@ -4,6 +4,7 @@
 Arquivo: view_developer.py
 Descrição: Contém a classe DeveloperView, que constrói e gerencia
 toda a Área do Desenvolvedor (Abas de Consultores e Marcas).
+(v5.6.3 - Corrige o preview da logo da marca ao fazer upload)
 """
 
 import ttkbootstrap as ttk
@@ -112,9 +113,9 @@ class DeveloperView:
         ttk.Button(frame_form, text="Salvar Alterações na Nuvem", style="primary.TButton", command=self.dev_salvar_alteracoes).pack(anchor='w', pady=20)
 
         self.dev_folgas_button = ttk.Button(frame_form, text="Ajustar Folgas",
-                                            command=self.show_folgas_popup,
-                                            style="info.TButton",
-                                            state='disabled')
+                                           command=self.show_folgas_popup,
+                                           style="info.TButton",
+                                           state='disabled')
         self.dev_folgas_button.pack(anchor='w', pady=5, ipady=4)
         
         self.populate_consultor_tree() # Preenche a lista
@@ -139,6 +140,9 @@ class DeveloperView:
         
         # Chama o 'load_profile_picture' do app principal
         self.app.load_profile_picture("", size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
+        # Atualiza o label da foto com a imagem carregada (default)
+        if hasattr(self, 'dev_foto_label'):
+             self.dev_foto_label.config(image=self.app.dev_preview_photo_tk)
         
         if hasattr(self, 'dev_folgas_button'):
             self.dev_folgas_button.config(state='disabled')
@@ -156,6 +160,7 @@ class DeveloperView:
         self.dev_nome_var.set(nome)
         self.dev_foto_path_var.set(foto_path)
         self.app.load_profile_picture(foto_path, size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
+        self.dev_foto_label.config(image=self.app.dev_preview_photo_tk) # Atualiza o label
         self.dev_folgas_button.config(state='normal')
 
     def dev_fazer_upload(self, is_marca_upload=False, parent_popup=None):
@@ -188,9 +193,13 @@ class DeveloperView:
         if is_marca_upload:
             self.dev_marca_logo_path_var.set(filename)
             self.app.load_image_no_circular(filename, size=self.app.LOGO_MARCA_SIZE, is_dev_preview=True)
+            # --- ***** AQUI ESTÁ A CORREÇÃO ***** ---
+            self.dev_marca_logo_label.config(image=self.app.dev_preview_logo_tk)
+            # --- ***** FIM DA CORREÇÃO ***** ---
         else:
             self.dev_foto_path_var.set(filename)
             self.app.load_profile_picture(filename, size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
+            self.dev_foto_label.config(image=self.app.dev_preview_photo_tk) # Atualiza o label
 
     def dev_salvar_alteracoes(self):
         """Salva as mudanças feitas no formulário no consultor selecionado."""
@@ -334,11 +343,11 @@ class DeveloperView:
                    command=self.dev_adicionar_marca).pack(side='left', padx=5)
                    
         self.dev_btn_editar_marca = ttk.Button(frame_lista_botoes, text="Editar/Ver Pessoas", style="primary.Outline.TButton", 
-                                               command=self.show_marca_popup, state='disabled')
+                                                command=self.show_marca_popup, state='disabled')
         self.dev_btn_editar_marca.pack(side='left', padx=5)
 
         self.dev_btn_excluir_marca = ttk.Button(frame_lista_botoes, text="Excluir", style="danger.Outline.TButton",
-                                                command=self.dev_excluir_marca, state='disabled')
+                                                 command=self.dev_excluir_marca, state='disabled')
         self.dev_btn_excluir_marca.pack(side='left', padx=5)
 
         self.dev_tree_marcas.bind('<<TreeviewSelect>>', self.on_dev_tree_marcas_select)
@@ -551,7 +560,7 @@ class DeveloperView:
         self.dev_marca_logo_label.pack(anchor='w', pady=5)
         
         btn_upload_logo = ttk.Button(frame_detalhes, text="Fazer Upload de Nova Logo...", 
-                                     command=lambda: self.dev_fazer_upload(is_marca_upload=True, parent_popup=popup))
+                                      command=lambda: self.dev_fazer_upload(is_marca_upload=True, parent_popup=popup))
         btn_upload_logo.pack(anchor='w', pady=5)
 
         ttk.Label(frame_detalhes, text="Caminho da Logo:").pack(anchor='w', pady=(10, 2))
@@ -563,7 +572,7 @@ class DeveloperView:
         ttk.Label(frame_detalhes, text="Nome da Marca:").pack(anchor='w', pady=(10, 2))
         dev_marca_nome_var = StringVar(value=nome_marca_original)
         entry_marca_nome = ttk.Entry(frame_detalhes, width=40, font=self.app.FONT_MAIN, 
-                                       textvariable=dev_marca_nome_var)
+                                      textvariable=dev_marca_nome_var)
         entry_marca_nome.pack(anchor='w', fill='x', pady=5)
 
         ttk.Label(frame_detalhes, text="Data da Lista (enviada pela gerência):").pack(anchor='w', pady=(10, 2))
@@ -576,6 +585,7 @@ class DeveloperView:
         entry_data_att.pack(anchor='w', fill='x', pady=5)
         
         self.app.load_image_no_circular(logo_path_atual, size=self.app.LOGO_MARCA_SIZE, is_dev_preview=True)
+        self.dev_marca_logo_label.config(image=self.app.dev_preview_logo_tk) # Atualiza o label
 
         # --- Painel Direito: Lista de Pessoas ---
         frame_pessoas = ttk.Frame(pw, padding=15)
@@ -619,13 +629,13 @@ class DeveloperView:
         frame_botoes_lista.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(10,0))
 
         btn_remove_pessoa = ttk.Button(frame_botoes_lista, text="Remover Selecionado", 
-                                        style="danger.Outline.TButton", 
-                                        command=lambda: listbox_pessoas.delete(ANCHOR))
+                                       style="danger.Outline.TButton", 
+                                       command=lambda: listbox_pessoas.delete(ANCHOR))
         btn_remove_pessoa.pack(side='left')
         
         btn_importar_lista = ttk.Button(frame_botoes_lista, text="Importar Lista (.txt)", 
-                                        style="info.Outline.TButton", 
-                                        command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
+                                       style="info.Outline.TButton", 
+                                       command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
         btn_importar_lista.pack(side='left', padx=10)
         
         # --- Botão de Salvar (no rodapé do popup) ---
@@ -661,7 +671,7 @@ class DeveloperView:
                 messagebox.showerror("Erro de Firebase", "Não foi possível salvar os dados da marca.", parent=popup)
 
         btn_save_marca = ttk.Button(frame_salvar, text="Salvar Alterações e Fechar",
-                                     style="success.TButton", command=on_save_marca)
+                                      style="success.TButton", command=on_save_marca)
         btn_save_marca.pack(side='right')
 
     def dev_importar_lista_pessoas(self, listbox_pessoas, parent_popup):

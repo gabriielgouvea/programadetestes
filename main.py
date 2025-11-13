@@ -5,7 +5,7 @@ Arquivo: main.py (O antigo simulacaocanciron.py)
 Descrição: Este é o arquivo principal que executa o aplicativo.
 Ele contém a classe App, gerencia a janela principal, a sidebar,
 o login e chama as 'Views' (telas) corretas.
-(v5.6.2 - Readicionada a lista 'tracked_scrolled_frames' para corrigir crash)
+(v5.6.5 - Corrigido AttributeError de DATA_FOLDER_PATH)
 """
 
 import ttkbootstrap as ttk
@@ -27,6 +27,7 @@ import webbrowser
 import platform
 import csv
 import traceback
+import multiprocessing as mp # <-- Importado para a câmera
 
 # --- CORREÇÃO DE PATH ---
 # Adiciona o diretório atual ao path do Python
@@ -115,7 +116,12 @@ class App(ttk.Window):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         
-        self.LOGO_MARCA_SIZE = LOGO_MARCA_SIZE # Torna a constante acessível para as views
+        # --- ***** AQUI ESTÁ A CORREÇÃO ***** ---
+        # Disponibiliza as constantes para as views
+        self.PROFILE_PIC_SIZE = PROFILE_PIC_SIZE
+        self.LOGO_MARCA_SIZE = LOGO_MARCA_SIZE 
+        self.DATA_FOLDER_PATH = DATA_FOLDER_PATH # <-- LINHA ADICIONADA
+        # --- ***** FIM DA CORREÇÃO ***** ---
 
         # --- Carregar Dados dos Consultores ---
         self.lista_completa_consultores = fm.carregar_consultores()
@@ -123,10 +129,8 @@ class App(ttk.Window):
         
         self.consultor_logado_data = {}
         
-        # --- ***** CORREÇÃO 1 (Início) ***** ---
         # Readicionando a lista que "Comissão" e "Folgas" usam
         self.tracked_scrolled_frames = []
-        # --- ***** CORREÇÃO 1 (Fim) ***** ---
 
         # --- Carregar Imagens ---
         self.load_images()
@@ -373,28 +377,37 @@ class App(ttk.Window):
         # 1. Destrói todos os widgets
         for widget in self.main_frame.winfo_children():
             try:
+                # Tenta desligar a câmera se for a AchadosView
+                if hasattr(widget, 'view_instance') and hasattr(widget.view_instance, 'on_close'):
+                    widget.view_instance.on_close()
                 widget.destroy()
             except Exception as e:
                 pass 
         
         # 2. Cria a nova tela (View)
+        view = None # Inicializa
         if view_name == "simulador":
-            SimuladorView(self, self.main_frame)
+            view = SimuladorView(self, self.main_frame)
         
         elif view_name == "comissao":
-            ComissaoView(self, self.main_frame)
+            view = ComissaoView(self, self.main_frame)
         
         elif view_name == "folgas":
-            FolgasView(self, self.main_frame)
+            view = FolgasView(self, self.main_frame)
             
         elif view_name == "liberacoes":
-            LiberacoesView(self, self.main_frame)
+            view = LiberacoesView(self, self.main_frame)
         
         elif view_name == "achados":
-            AchadosView(self, self.main_frame)
+            view = AchadosView(self, self.main_frame)
             
         elif view_name == "developer_area":
-            DeveloperView(self, self.main_frame)
+            view = DeveloperView(self, self.main_frame)
+        
+        # Armazena a instância da view no próprio frame
+        if view is not None and self.main_frame.winfo_children():
+             self.main_frame.winfo_children()[-1].view_instance = view
+
 
     def show_login_view(self, force_dev_login=False):
         """Mostra a tela de login, escondendo a sidebar."""
@@ -403,6 +416,9 @@ class App(ttk.Window):
         # 1. Agora destrói todos os widgets
         for widget in self.main_frame.winfo_children():
             try:
+                # Tenta desligar a câmera se for a AchadosView
+                if hasattr(widget, 'view_instance') and hasattr(widget.view_instance, 'on_close'):
+                    widget.view_instance.on_close()
                 widget.destroy()
             except Exception:
                 pass
@@ -530,6 +546,13 @@ class App(ttk.Window):
 
 # --- Bloco Principal ---
 if __name__ == "__main__":
+    # --- Adiciona suporte a multiprocessing no PyInstaller ---
+    try:
+        mp.freeze_support()
+    except:
+        pass
+    # --- Fim da adição ---
+    
     app = App(themename="flatly")
     
     # Se a conexão falhou, o __init__ terá retornado

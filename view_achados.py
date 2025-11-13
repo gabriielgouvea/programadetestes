@@ -4,7 +4,7 @@
 Arquivo: view_achados.py
 Descrição: Contém a classe AchadosView, que constrói e gerencia
 a nova tela de Achados e Perdidos.
-(v5.6.2 - Correção do layout dos botões 'Ver Detalhes' e 'X')
+(v5.6.9 - Tentativa final: Forçando a API moderna CAP_MSMF)
 """
 
 import ttkbootstrap as ttk
@@ -14,6 +14,9 @@ from tkinter import messagebox, Toplevel, StringVar, scrolledtext, PhotoImage
 from datetime import date, datetime
 import os
 import math # Para paginação
+# import threading # <-- REMOVIDO
+# import multiprocessing as mp # <-- REMOVIDO
+# import queue # <-- REMOVIDO
 
 # --- Importa o gerenciador do Firebase ---
 import firebase_manager as fm
@@ -26,6 +29,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 # --- Tenta importar o OpenCV (para a webcam) ---
 try:
     import cv2
+    import numpy as np
     OPENCV_DISPONIVEL = True
 except ImportError:
     OPENCV_DISPONIVEL = False
@@ -51,6 +55,8 @@ class CadastroItemPopup(Toplevel):
         self.foto_capturada_tk = None # Guarda a imagem TK (para exibir)
         self.camera_index = 0 # Qual câmera usar
         
+        self.id_loop_update = None # Guarda o ID do loop 'after'
+        
         # --- Variáveis para os novos campos ---
         self.data_cadastro_var = StringVar(value=date.today().strftime("%d/%m/%Y"))
         self.consultor_var = StringVar(value=self.app.consultor_logado_data.get('nome', 'N/A'))
@@ -72,19 +78,19 @@ class CadastroItemPopup(Toplevel):
         draw = ImageDraw.Draw(self.camera_placeholder_img)
         
         try:
-            pil_font = ImageFont.load_default(size=14)
+            self.pil_font = ImageFont.load_default(size=14)
         except:
-            pil_font = ImageFont.load_default()
+            self.pil_font = ImageFont.load_default()
 
-        text = "Ligar Câmera"
-        text_bbox = draw.textbbox((0, 0), text, font=pil_font) 
+        self.texto_placeholder = "Ligar Câmera"
+        text_bbox = draw.textbbox((0, 0), self.texto_placeholder, font=self.pil_font) 
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
         draw.text(
             ((320 - text_width) / 2, (240 - text_height) / 2), 
-            text, 
+            self.texto_placeholder, 
             fill=(50, 50, 50), 
-            font=pil_font
+            font=self.pil_font
         )
         self.camera_placeholder_tk = ImageTk.PhotoImage(self.camera_placeholder_img)
 
@@ -102,20 +108,8 @@ class CadastroItemPopup(Toplevel):
         self.btn_tirar_foto.pack(fill='x', pady=5)
         
         if not OPENCV_DISPONIVEL:
-            img_err = Image.new('RGB', (320, 240), (230, 230, 230))
-            draw = ImageDraw.Draw(img_err)
-            err_text = "OpenCV não instalado.\nImpossível usar a câmera."
-            text_bbox = draw.textbbox((0, 0), err_text, font=pil_font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            draw.text(
-                ((320 - text_width) / 2, (240 - text_height) / 2),
-                err_text, 
-                fill=(200, 0, 0), 
-                font=pil_font
-            )
-            self.img_err_tk = ImageTk.PhotoImage(img_err)
-            self.camera_label.config(image=self.img_err_tk, cursor="")
+            self._desenhar_placeholder("OpenCV não instalado.\nImpossível usar a câmera.", (200, 0, 0))
+            self.camera_label.config(cursor="")
             self.camera_label.unbind("<Button-1>")
             self.btn_tirar_foto.config(state='disabled')
             self.btn_ligar_camera.config(state='disabled')
@@ -172,67 +166,118 @@ class CadastroItemPopup(Toplevel):
         self.btn_cancelar.grid(row=0, column=2, ipady=5)
         
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # Não iniciamos mais a câmera em background
 
+    def _desenhar_placeholder(self, text, color=(50,50,50)):
+        """Função helper para atualizar o texto do placeholder da câmera."""
+        try:
+            img = Image.new('RGB', (320, 240), (230, 230, 230))
+            draw = ImageDraw.Draw(img)
+            text_bbox = draw.textbbox((0, 0), text, font=self.pil_font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            draw.text(
+                ((320 - text_width) / 2, (240 - text_height) / 2),
+                text, 
+                fill=color, 
+                font=self.pil_font
+            )
+            self.camera_placeholder_tk = ImageTk.PhotoImage(img)
+            
+            # Garante que o widget ainda existe antes de configurar
+            if self.camera_label.winfo_exists():
+                self.camera_label.config(image=self.camera_placeholder_tk)
+                self.camera_label.image = self.camera_placeholder_tk
+        except Exception as e:
+            print(f"Erro ao desenhar placeholder: {e}")
+
+    # --- **** INÍCIO DA MUDANÇA (PLANO E) **** ---
+    
     def open_camera(self):
+        """Tenta ligar a câmera usando a API moderna MSMF."""
         if not OPENCV_DISPONIVEL:
-            messagebox.showerror("Erro", "OpenCV não está instalado. Não é possível usar a câmera.", parent=self)
+            messagebox.showerror("Erro", "OpenCV não está instalado.", parent=self)
             return
 
-        # Libera a câmera antiga, se estiver ligada
+        # Se a câmera está LIGADA, desliga
         if self.webcam_feed and self.webcam_feed.isOpened():
-            self.webcam_feed.release()
-            self.webcam_feed = None # Garante que está fechado
-            # Volta para o placeholder visual
-            self.camera_label.config(image=self.camera_placeholder_tk)
-            self.camera_label.image = self.camera_placeholder_tk
-            self.btn_ligar_camera.config(text="Ligar Câmera")
-            self.btn_tirar_foto.config(state='disabled')
-            return # Se clicou para desligar, para aqui
+            self._release_camera()
+            self.camera_index = (self.camera_index + 1) % 3 # Prepara para a PRÓXIMA
+            
+            # Tenta ligar a próxima câmera
+            self.open_camera()
+            return
+            
+        # --- AQUI ESTÁ A MUDANÇA ---
+        # Força o OpenCV a usar a API Media Foundation (MSMF)
+        api_preferida = cv2.CAP_MSMF
+        # --- FIM DA MUDANÇA ---
 
-        # Tenta abrir a câmera (0 é a padrão, 1 seria uma segunda, etc.)
-        self.webcam_feed = cv2.VideoCapture(self.camera_index)
+        # Tenta abrir a câmera
+        self.webcam_feed = cv2.VideoCapture(self.camera_index + api_preferida)
         
         if not self.webcam_feed.isOpened():
             # Se falhou, tenta a próxima câmera (looping de 0 a 2)
             self.camera_index = (self.camera_index + 1) % 3
-            self.webcam_feed = cv2.VideoCapture(self.camera_index)
+            self.webcam_feed = cv2.VideoCapture(self.camera_index + api_preferida)
             
             if not self.webcam_feed.isOpened():
-                messagebox.showerror("Erro de Câmera", "Não foi possível encontrar uma webcam.", parent=self)
+                messagebox.showerror("Erro de Câmera", f"Não foi possível encontrar uma webcam (API: MSMF, Índice: {self.camera_index}).", parent=self)
+                self._release_camera() # Garante que tudo seja resetado
                 return
         
-        # Define a resolução (baixa) para ser rápido
+        # SUCESSO! Define a resolução e inicia o feed
+        print(f"Câmera {self.camera_index} conectada com API MSMF.")
         self.webcam_feed.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
         self.webcam_feed.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
         
-        # Atualiza o texto do botão para "Desligar/Trocar Câmera"
-        self.btn_ligar_camera.config(text="Desligar/Trocar Câmera")
-        self.btn_tirar_foto.config(state='normal') # Habilita o botão de tirar foto
+        self.btn_ligar_camera.config(text="Desligar/Trocar")
+        self.btn_tirar_foto.config(state='normal')
         
-        # Inicia o loop de atualização do vídeo
-        self.update_webcam_feed()
+        self.update_webcam_feed() # Inicia o loop de vídeo
 
+    def _release_camera(self):
+        """[RODA NA UI] Para o loop de vídeo e desliga a câmera."""
+        if self.id_loop_update: # Se tem um loop agendado
+            self.after_cancel(self.id_loop_update) # Cancela o próximo frame
+            self.id_loop_update = None
+            
+        if self.webcam_feed and self.webcam_feed.isOpened():
+            self.webcam_feed.release() # Desliga o hardware
+            
+        self.webcam_feed = None
+        
+        # Reseta a UI (só se o widget ainda existir)
+        if self.winfo_exists():
+            self._desenhar_placeholder("Ligar Câmera")
+            self.btn_ligar_camera.config(text="Ligar/Trocar Câmera", state='normal')
+            self.btn_tirar_foto.config(state='disabled')
+        
     def update_webcam_feed(self):
-        if not (self.webcam_feed and self.webcam_feed.isOpened()):
-            return # Para o loop se a câmera foi desligada ou nunca ligou
+        """Lê um frame e agenda o próximo (se a câmera ainda estiver ligada)."""
+        if not (self.webcam_feed and self.webcam_feed.isOpened() and self.winfo_exists()):
+            self._release_camera() # Para o loop se a câmera foi desligada ou o popup fechou
+            return
             
         ret, frame = self.webcam_feed.read()
         if ret:
-            # Converte a imagem do OpenCV (BGR) para PIL (RGB)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img_pil = Image.fromarray(frame_rgb)
             img_tk = ImageTk.PhotoImage(image=img_pil)
             
-            # Atualiza o label da câmera
-            self.camera_label.config(image=img_tk, text="")
-            self.camera_label.image = img_tk
+            if self.camera_label.winfo_exists():
+                self.camera_label.config(image=img_tk, text="")
+                self.camera_label.image = img_tk
         
-        # Repete a função a cada 15ms
-        self.after(15, self.update_webcam_feed)
+        # Agenda o próximo frame
+        self.id_loop_update = self.after(15, self.update_webcam_feed)
+
+    # --- **** FIM DAS MUDANÇAS DA CÂMERA **** ---
 
     def take_picture(self):
         if not (self.webcam_feed and self.webcam_feed.isOpened()):
-            messagebox.showwarning("Sem Câmera", "A câmera não está ligada. Clique em 'Ligar Câmera' primeiro.", parent=self)
+            messagebox.showwarning("Sem Câmera", "A câmera não está ligada.", parent=self)
             return
             
         ret, frame = self.webcam_feed.read()
@@ -325,9 +370,7 @@ class CadastroItemPopup(Toplevel):
 
     def on_close(self):
         # Desliga a câmera antes de fechar a janela
-        if self.webcam_feed and self.webcam_feed.isOpened():
-            self.webcam_feed.release()
-            self.webcam_feed = None # Garante que está fechado
+        self._release_camera()
         self.destroy()
 
 
@@ -420,7 +463,6 @@ class AchadosView:
         self.search_var.trace_add("write", self._on_search_change) # Chama a função ao digitar
         
         self.pagina_atual = 1
-        # --- ***** MUDANÇA 1: Itens por página ***** ---
         self.ITENS_POR_PAGINA = 6 # 3 colunas x 2 linhas
 
         # --- Frame Superior: Título e Botão ---
@@ -674,12 +716,10 @@ class AchadosView:
         elif item_status == "Baixado":
              ttk.Label(frame_acoes, text="Item Baixado", bootstyle='danger-inverse').grid(row=0, column=0, columnspan=2)
 
-        # --- ***** CORREÇÃO DO LAYOUT DO BOTÃO ***** ---
+        # --- Layout dos botões inferiores ---
         
-        # Frame para os botões de baixo
         frame_botoes_inferiores = ttk.Frame(card, bootstyle='secondary')
         frame_botoes_inferiores.pack(fill='x', side='bottom')
-        # (Removemos a linha .column_configure que dava erro)
 
         # Botão de Detalhes
         btn_detalhes = ttk.Button(
@@ -688,7 +728,6 @@ class AchadosView:
             style='info.Outline.TButton',
             command=lambda data=item_data: self.abrir_popup_detalhes(data)
         )
-        # Usamos .pack() para ser compatível com o 'card'
         btn_detalhes.pack(side='left', fill='x', expand=True) 
 
         # Botão de Excluir (Lixeira)
@@ -699,9 +738,7 @@ class AchadosView:
             style='danger.Outline.TButton',
             command=lambda data=item_data: self._on_excluir_item(data)
         )
-        # Usamos .pack()
         btn_excluir.pack(side='right', padx=(5,0))
-        # --- ***** FIM DA CORREÇÃO ***** ---
 
     def abrir_popup_detalhes(self, item_data):
         """Abre o novo popup com todos os detalhes do item."""

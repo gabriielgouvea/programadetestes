@@ -4,7 +4,7 @@
 Arquivo: view_simulador.py
 Descrição: Contém a classe SimuladorView, que constrói e gerencia
 a tela do Simulador de Cancelamento.
-(POPUP DE VALOR CUSTOMIZADO)
+(v5.6.10 - Regra de negócio para perguntar o valor APENAS em Junho)
 """
 
 import ttkbootstrap as ttk
@@ -114,7 +114,7 @@ class SimuladorView:
         container.pack(fill='both', expand=True)
         
         # Mensagem
-        msg = "Este contrato (iniciado a partir de 01/06/2025) é no valor novo ou antigo?"
+        msg = "Este contrato (iniciado em Junho/2025) é no valor novo ou antigo?"
         ttk.Label(container, text=msg, font=self.app.FONT_BOLD, wraplength=400, justify='center').pack(pady=(0, 15))
         
         ttk.Label(container, text="Selecione o valor correto do plano Anual:", font=self.app.FONT_MAIN).pack(pady=(0, 20))
@@ -185,25 +185,40 @@ class SimuladorView:
             messagebox.showerror("Data Inválida", "A Data de Início do contrato não pode ser uma data no futuro.")
             return
 
-        # --- INÍCIO DA NOVA LÓGICA DE PREÇO ---
-        DATA_MUDANCA_PRECO = date(2025, 6, 1) # 1º de Junho de 2025
+        # --- ***** INÍCIO DA NOVA LÓGICA DE PREÇO (v5.6.10) ***** ---
+        
+        # Datas de referência
+        DATA_INICIO_PERGUNTA = date(2025, 6, 1) # 1º de Junho de 2025
+        DATA_FIM_PERGUNTA = date(2025, 6, 30)    # 30 de Junho de 2025
+        DATA_PRECO_NOVO_AUTO = date(2025, 7, 1) # 1º de Julho de 2025
+        
         valor_override = None # Nenhum valor especial por padrão
 
-        # 1. Verifica se é o plano Anual E se a data é nova
-        if tipo_plano == 'Anual (12 meses)' and data_inicio >= DATA_MUDANCA_PRECO:
+        # 1. Verifica se é o plano Anual
+        if tipo_plano == 'Anual (12 meses)':
             
-            # 2. CHAMA O NOVO POPUP CUSTOMIZADO
-            self._ask_plan_value_popup()
+            # 2. Se a data de início for EM JUNHO 2025 (o mês da virada), PERGUNTA.
+            if DATA_INICIO_PERGUNTA <= data_inicio <= DATA_FIM_PERGUNTA:
+                
+                # 2a. CHAMA O POPUP CUSTOMIZADO
+                self._ask_plan_value_popup()
+                
+                # 2b. Verifica a resposta
+                if self.popup_plano_valor is None:
+                    # Usuário fechou o popup (clicou no 'X'), cancela o cálculo
+                    messagebox.showwarning("Cálculo Cancelado", "Você deve selecionar um valor de plano para continuar.")
+                    return 
+                
+                valor_override = self.popup_plano_valor # Recebe 359.00 ou 389.00
             
-            # 3. Verifica a resposta
-            if self.popup_plano_valor is None:
-                # Usuário fechou o popup (clicou no 'X'), cancela o cálculo
-                messagebox.showwarning("Cálculo Cancelado", "Você deve selecionar um valor de plano para continuar.")
-                return 
+            # 3. Se a data de início for A PARTIR DE JULHO 2025, usa 389 direto.
+            elif data_inicio >= DATA_PRECO_NOVO_AUTO:
+                valor_override = 389.00
             
-            valor_override = self.popup_plano_valor # Recebe 359.00 ou 389.00
+            # 4. (Implícito) Se for antes de Junho 2025, valor_override continua None,
+            #    e a 'logica_de_calculo' usará o valor base (359).
             
-        # --- FIM DA NOVA LÓGICA DE PREÇO ---
+        # --- ***** FIM DA NOVA LÓGICA DE PREÇO ***** ---
 
 
         def processar_calculo(pagamento_hoje_status=None):
@@ -486,3 +501,4 @@ class SimuladorView:
                 messagebox.showerror("Erro de Conexão", "Não foi possível conectar ao servidor. Verifique sua conexão e se o servidor AssinaGym está online.")
 
         ttk.Button(container, text="Confirmar e Gerar Link", command=finalizar_geracao, style='success.TButton').pack(pady=10)
+        self.app.wait_window(popup)

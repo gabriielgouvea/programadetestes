@@ -58,8 +58,12 @@ def validar_cpf_algoritmo(cpf):
         digito2 = (soma * 10 % 11) % 10
         if digito2 != int(cpf[10]): 
             return False
+    
+    # --- VOLTANDO AO CÓDIGO ORIGINAL (COMO PEDIDO) ---
     except ValueError: 
         return False
+    # --- FIM DA CORREÇÃO ---
+    
     return True
 
 # --- Funções de Formatação ---
@@ -85,22 +89,42 @@ def formatar_reais(valor):
     """Formata um float para o padrão R$ 1.234,56"""
     return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
-# --- Lógica de Negócio Principal ---
+# --- Lógica de Negócio Principal (ATUALIZADA) ---
 
-def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagamento_hoje_confirmado=None):
+def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagamento_hoje_confirmado=None, **kwargs):
     """
     Executa a lógica central de cálculo de cancelamento.
     Retorna um dicionário com o resultado ou com uma chave de erro.
+    
+    **kwargs pode incluir:
+    - valor_mensalidade_override: (float) Usado para o novo plano de R$389.
     """
     try:
         parcelas_em_atraso = int(parcelas_em_atraso_str)
+        
+        # 1. Pega os dados base do plano (ex: 359.00 e 12 meses)
         plano_selecionado = PLANOS[tipo_plano_str]
-        valor_mensalidade = plano_selecionado['valor']
+        valor_mensalidade_base = plano_selecionado['valor'] 
         duracao_plano = plano_selecionado['duracao']
+        
         data_hoje = date.today()
 
         if data_inicio < date(2024, 10, 1): 
             return {'erro_data': "A data de início não pode ser anterior a Outubro de 2024."}
+        
+        # --- LÓGICA DO NOVO PREÇO ---
+        # Pega o valor passado pelo popup (ex: 389.00)
+        valor_mensalidade_override = kwargs.get('valor_mensalidade_override', None)
+        
+        # O valor 'real' para atrasos/próxima parcela é o R$389 (se existir) ou o R$359 (base)
+        valor_mensalidade_real = valor_mensalidade_override if valor_mensalidade_override is not None else valor_mensalidade_base
+        
+        # O valor 'para multa' é SEMPRE o R$359 (base) se for Anual
+        if tipo_plano_str == 'Anual (12 meses)':
+            valor_para_multa = valor_mensalidade_base # Sempre 359.00
+        else:
+            valor_para_multa = valor_mensalidade_real # Outros planos (Semestral) usam seu próprio valor
+        # --- FIM DA LÓGICA DO PREÇO ---
 
         diff = relativedelta(data_hoje, data_inicio)
         meses_passados_total = diff.years * 12 + diff.months
@@ -119,15 +143,15 @@ def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagam
 
         if data_hoje.day == data_inicio.day and data_hoje >= data_inicio:
             if pagamento_hoje_confirmado is False:
-                valor_mensalidade_adicional = valor_mensalidade
+                valor_mensalidade_adicional = valor_mensalidade_real # Usa valor REAL
                 meses_a_pagar_adiantado = 1
-                linha_mensalidade_adicional = f"R$ {valor_mensalidade:.2f} (referente a hoje - {data_hoje.strftime('%d/%m/%Y')})"
+                linha_mensalidade_adicional = f"R$ {valor_mensalidade_real:.2f} (referente a hoje - {data_hoje.strftime('%d/%m/%Y')})"
         else:
             dias_para_vencimento = (proximo_vencimento - data_hoje).days
             if 0 < dias_para_vencimento <= 30:
-                valor_mensalidade_adicional = valor_mensalidade
+                valor_mensalidade_adicional = valor_mensalidade_real # Usa valor REAL
                 meses_a_pagar_adiantado = 1
-                linha_mensalidade_adicional = f"R$ {valor_mensalidade:.2f} (em {dias_para_vencimento} dias - {proximo_vencimento.strftime('%d/%m/%Y')})"
+                linha_mensalidade_adicional = f"R$ {valor_mensalidade_real:.2f} (em {dias_para_vencimento} dias - {proximo_vencimento.strftime('%d/%m/%Y')})"
 
         meses_restantes_contrato = duracao_plano - meses_efetivamente_pagos
         is_due_date_scenario = data_hoje.day == data_inicio.day and data_hoje >= data_inicio
@@ -138,8 +162,9 @@ def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagam
         else: 
             meses_para_multa = max(0, meses_restantes_contrato)
 
-        valor_multa = (meses_para_multa * valor_mensalidade) * 0.10
-        valor_atrasado = parcelas_em_atraso * valor_mensalidade
+        # --- CÁLCULOS ATUALIZADOS ---
+        valor_multa = (meses_para_multa * valor_para_multa) * 0.10     # Usa valor PARA MULTA (359)
+        valor_atrasado = parcelas_em_atraso * valor_mensalidade_real  # Usa valor REAL (389 ou 359)
         total_a_pagar = valor_atrasado + valor_mensalidade_adicional + valor_multa
 
         if data_hoje.day == data_inicio.day and data_hoje >= data_inicio:
@@ -152,7 +177,7 @@ def logica_de_calculo(data_inicio, tipo_plano_str, parcelas_em_atraso_str, pagam
         return {
             'data_simulacao': data_hoje,
             'plano': tipo_plano_str,
-            'valor_plano': valor_mensalidade,
+            'valor_plano': valor_mensalidade_real, # Mostra o valor real (389 ou 359)
             'data_inicio_contrato': data_inicio,
             'parcelas_atrasadas_qtd': parcelas_em_atraso,
             'valor_atrasado': valor_atrasado,

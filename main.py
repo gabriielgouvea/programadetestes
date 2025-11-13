@@ -51,19 +51,19 @@ from app_utils import formatar_data
 import shutil
 
 # --- Variáveis Globais e Constantes ---
-APP_VERSION = "5.2.0-Refatorado" # ATUALIZADO
+APP_VERSION = "5.2.2-Refatorado-Fix" # ATUALIZADO
 VERSION_URL = "https://raw.githubusercontent.com/gabriielgouvea/veritas/main/version.json"
 
 # CORREÇÃO: Define o caminho da pasta 'data'
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_FOLDER_PATH = os.path.join(SCRIPT_PATH, "data") # Pasta para todos os dados
 
-# Variáveis que o app principal gerencia
-consultor_logado_data = {}
+# --- REMOVIDA A VARIÁVEL GLOBAL ---
+# consultor_logado_data = {} 
 
 PROFILE_PIC_SIZE = (96, 96)
 ICON_SIZE = (22, 22)
-LOGO_MARCA_SIZE = (150, 150) # Novo: Tamanho para logos de marcas
+LOGO_MARCA_SIZE = (150, 150) # Tamanho para logos de marcas
 
 # --- FUNÇÕES AUXILIARES (APENAS as que o App usa) ---
 def check_for_updates():
@@ -108,24 +108,15 @@ class App(ttk.Window):
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
-
-        # --- Configuração da Janela ---
-        self.title(f"Veritas | Sistema de Gestão v{APP_VERSION}")
-        self.state('zoomed')
-        self.resizable(True, True)
-
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
         
-        # --- ADICIONE ESTA LINHA ---
         self.LOGO_MARCA_SIZE = LOGO_MARCA_SIZE # Torna a constante acessível para as views
 
         # --- Carregar Dados dos Consultores ---
         self.lista_completa_consultores = fm.carregar_consultores()
-
-        # --- Carregar Dados dos Consultores ---
-        self.lista_completa_consultores = fm.carregar_consultores()
         self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
+        
+        # --- CORREÇÃO: Variável agora é um atributo da classe ---
+        self.consultor_logado_data = {}
         
         self.tracked_scrolled_frames = [] # Lista para rastrear ScrolledFrames
 
@@ -231,7 +222,6 @@ class App(ttk.Window):
         if is_dev_preview:
             self.dev_preview_photo_tk = loaded_photo
             # A view 'view_developer' é responsável por atualizar seu próprio label
-            # (Não podemos mais fazer 'self.dev_foto_label.config' daqui)
         else:
             self.profile_photo = loaded_photo
             if hasattr(self, 'profile_pic_label') and self.profile_pic_label.winfo_exists():
@@ -370,10 +360,9 @@ class App(ttk.Window):
     def show_view(self, view_name):
         """
         Limpa o frame principal e carrega a nova 'tela'.
-        ESTA É A FUNÇÃO MAIS IMPORTANTE DA REFATORAÇÃO.
         """
         
-        # 1. Desliga os eventos de ScrolledFrames (Sua correção de bug)
+        # 1. Desliga os eventos de ScrolledFrames (Correção TclError)
         if hasattr(self, 'tracked_scrolled_frames'):
             for frame in self.tracked_scrolled_frames:
                 try:
@@ -381,7 +370,7 @@ class App(ttk.Window):
                         frame.disable_scrolling()
                         frame.unbind("<Enter>")
                         frame.unbind("<Leave>")
-                        if frame.container.winfo_exists():
+                        if hasattr(frame, 'container') and frame.container.winfo_exists():
                             frame.container.unbind("<Configure>")
                 except Exception as e:
                     print(f"Aviso: Tentativa de desativar scroll falhou: {e}")
@@ -393,11 +382,6 @@ class App(ttk.Window):
         self.tracked_scrolled_frames = [] # Limpa a lista de rastreamento
 
         # 3. Cria a nova tela (View)
-        # O 'self' é passado para que a View possa acessar
-        # funções do app (ex: show_toast, _center_popup)
-        # O 'self.main_frame' é passado para a View saber
-        # onde se desenhar.
-        
         if view_name == "simulador":
             SimuladorView(self, self.main_frame)
         
@@ -417,7 +401,7 @@ class App(ttk.Window):
         """Mostra a tela de login, escondendo a sidebar."""
         self.sidebar_frame.grid_remove()
         
-        # Desliga os ScrolledFrames (Bug TclError)
+        # Desliga os ScrolledFrames (Correção TclError)
         if hasattr(self, 'tracked_scrolled_frames'):
             for frame in self.tracked_scrolled_frames:
                 try:
@@ -425,7 +409,7 @@ class App(ttk.Window):
                         frame.disable_scrolling()
                         frame.unbind("<Enter>")
                         frame.unbind("<Leave>")
-                        if frame.container.winfo_exists():
+                        if hasattr(frame, 'container') and frame.container.winfo_exists():
                             frame.container.unbind("<Configure>")
                 except Exception as e:
                     print(f"Aviso: Tentativa de desativar scroll (login) falhou: {e}")
@@ -475,7 +459,8 @@ class App(ttk.Window):
         self.combo_consultor_login.set("") 
         
         def on_login():
-            global consultor_logado_data # Variável global para as views usarem
+            # --- CORREÇÃO: Remove 'global' ---
+            # global consultor_logado_data 
             consultor_selecionado = self.combo_consultor_login.get()
             if not consultor_selecionado:
                 messagebox.showwarning("Atenção", "Por favor, selecione um consultor para continuar."); return
@@ -484,15 +469,16 @@ class App(ttk.Window):
                  messagebox.showwarning("Consultor Inválido", "O nome digitado não está na lista de consultores.")
                  return
 
-            # Atualiza a variável global
-            consultor_logado_data = next((c for c in self.lista_completa_consultores if c['nome'] == consultor_selecionado), None)
+            # --- CORREÇÃO: Atualiza o atributo da classe ---
+            self.consultor_logado_data = next((c for c in self.lista_completa_consultores if c['nome'] == consultor_selecionado), None)
 
-            if not consultor_logado_data:
+            if not self.consultor_logado_data:
                 messagebox.showerror("Erro", "Não foi possível encontrar os dados do consultor.")
                 return
 
-            self.consultant_label.config(text=consultor_logado_data['nome'])
-            self.load_profile_picture(consultor_logado_data['foto_path'])
+            # --- CORREÇÃO: Lê do atributo da classe ---
+            self.consultant_label.config(text=self.consultor_logado_data['nome'])
+            self.load_profile_picture(self.consultor_logado_data['foto_path'])
             self.trocar_consultor_button.config(text="Trocar Consultor")
 
             self.sidebar_frame.grid()

@@ -4,6 +4,7 @@
 Arquivo: view_simulador.py
 Descrição: Contém a classe SimuladorView, que constrói e gerencia
 a tela do Simulador de Cancelamento.
+(POPUP DE VALOR CUSTOMIZADO)
 """
 
 import ttkbootstrap as ttk
@@ -34,6 +35,9 @@ class SimuladorView:
         
         # Variável para guardar o resultado do cálculo
         self.calculo_resultado = {}
+        
+        # Variável para o resultado do popup customizado
+        self.popup_plano_valor = None 
 
         # --- Início: Código de create_cancellation_view ---
         
@@ -95,8 +99,73 @@ class SimuladorView:
 
         # --- Fim: Código de create_cancellation_view ---
 
+    # --- NOVO POPUP CUSTOMIZADO ---
+    def _ask_plan_value_popup(self):
+        """Mostra um popup customizado para perguntar o valor do plano."""
+        self.popup_plano_valor = None # Reseta o valor
+        
+        popup = Toplevel(self.app)
+        popup.title("Verificação de Contrato")
+        
+        # Centraliza o popup
+        self.app._center_popup(popup, 450, 220) # (popup, largura, altura)
+        
+        container = ttk.Frame(popup, padding=20)
+        container.pack(fill='both', expand=True)
+        
+        # Mensagem
+        msg = "Este contrato (iniciado a partir de 01/06/2025) é no valor novo ou antigo?"
+        ttk.Label(container, text=msg, font=self.app.FONT_BOLD, wraplength=400, justify='center').pack(pady=(0, 15))
+        
+        ttk.Label(container, text="Selecione o valor correto do plano Anual:", font=self.app.FONT_MAIN).pack(pady=(0, 20))
+
+        # Frame dos botões
+        frame_botoes = ttk.Frame(container)
+        frame_botoes.pack(fill='x', expand=True)
+        
+        # Preenche o espaço entre os botões
+        frame_botoes.grid_columnconfigure(0, weight=1)
+        frame_botoes.grid_columnconfigure(1, weight=1)
+
+        def on_select(valor):
+            self.popup_plano_valor = valor
+            popup.destroy()
+
+        # Botão 1
+        btn_359 = ttk.Button(
+            frame_botoes, 
+            text="R$ 359,00 (Antigo)", 
+            command=lambda: on_select(359.00),
+            style="secondary.TButton",
+            width=20
+        )
+        btn_359.grid(row=0, column=0, padx=10, ipady=10)
+
+        # Botão 2
+        btn_389 = ttk.Button(
+            frame_botoes, 
+            text="R$ 389,00 (Novo)", 
+            command=lambda: on_select(389.00),
+            style="success.TButton",
+            width=20
+        )
+        btn_389.grid(row=0, column=1, padx=10, ipady=10)
+        
+        # Foca no botão novo por padrão
+        btn_389.focus_set()
+        
+        # Garante que o usuário não pode fechar pelo 'X' sem uma resposta
+        def on_close():
+            self.popup_plano_valor = None # Aborta o cálculo
+            popup.destroy()
+
+        popup.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # Espera o usuário responder
+        self.app.wait_window(popup)
+
     def do_calculation(self):
-        """Função de cálculo."""
+        """Função de cálculo (ATUALIZADA)."""
         data_inicio_str = self.entry_data_inicio.get()
         try:
             dia, mes, ano = map(int, data_inicio_str.split('/'))
@@ -116,8 +185,42 @@ class SimuladorView:
             messagebox.showerror("Data Inválida", "A Data de Início do contrato não pode ser uma data no futuro.")
             return
 
+        # --- INÍCIO DA NOVA LÓGICA DE PREÇO ---
+        DATA_MUDANCA_PRECO = date(2025, 6, 1) # 1º de Junho de 2025
+        valor_override = None # Nenhum valor especial por padrão
+
+        # 1. Verifica se é o plano Anual E se a data é nova
+        if tipo_plano == 'Anual (12 meses)' and data_inicio >= DATA_MUDANCA_PRECO:
+            
+            # 2. CHAMA O NOVO POPUP CUSTOMIZADO
+            self._ask_plan_value_popup()
+            
+            # 3. Verifica a resposta
+            if self.popup_plano_valor is None:
+                # Usuário fechou o popup (clicou no 'X'), cancela o cálculo
+                messagebox.showwarning("Cálculo Cancelado", "Você deve selecionar um valor de plano para continuar.")
+                return 
+            
+            valor_override = self.popup_plano_valor # Recebe 359.00 ou 389.00
+            
+        # --- FIM DA NOVA LÓGICA DE PREÇO ---
+
+
         def processar_calculo(pagamento_hoje_status=None):
-            self.calculo_resultado = logica_de_calculo(data_inicio, tipo_plano, parcelas_atrasadas_str, pagamento_hoje_status)
+            
+            # --- Prepara o parâmetro para a lógica ---
+            kwargs = {}
+            if valor_override is not None:
+                kwargs['valor_mensalidade_override'] = valor_override
+
+            # 3. Chama a lógica com o parâmetro extra
+            self.calculo_resultado = logica_de_calculo(
+                data_inicio, 
+                tipo_plano, 
+                parcelas_atrasadas_str, 
+                pagamento_hoje_status,
+                **kwargs  # <--- Passa o valor_override para a função
+            )
 
             for widget in self.frame_resultado.winfo_children():
                 if widget != self.frame_whatsapp:
@@ -134,12 +237,14 @@ class SimuladorView:
                 self.frame_whatsapp.pack_forget()
                 return
 
+            # O 'valor_plano' agora virá como 389 ou 359, baseado na lógica
             ttk.Label(self.frame_resultado, text=f"Data da Simulação: {self.calculo_resultado['data_simulacao'].strftime('%d/%m/%Y')}").pack(fill='x', anchor='w')
             ttk.Label(self.frame_resultado, text=f"Plano: {self.calculo_resultado['plano']} (R$ {self.calculo_resultado['valor_plano']:.2f})").pack(fill='x', anchor='w')
             ttk.Label(self.frame_resultado, text=f"Início do Contrato: {self.calculo_resultado['data_inicio_contrato'].strftime('%d/%m/%Y')}").pack(fill='x', anchor='w')
             ttk.Separator(self.frame_resultado).pack(fill='x', pady=5)
             ttk.Label(self.frame_resultado, text=f"Valor por parcelas em atraso ({self.calculo_resultado['parcelas_atrasadas_qtd']}x): R$ {self.calculo_resultado['valor_atrasado']:.2f}", font=self.app.FONT_BOLD).pack(fill='x', anchor='w')
             ttk.Label(self.frame_resultado, text=f"Mensalidade a vencer: {self.calculo_resultado['linha_mensalidade_a_vencer']}", font=self.app.FONT_BOLD).pack(fill='x', anchor='w')
+            # A multa aqui será calculada em cima dos 359, como pedido
             ttk.Label(self.frame_resultado, text=f"Multa contratual (10% sobre {self.calculo_resultado['meses_para_multa']} meses): R$ {self.calculo_resultado['valor_multa']:.2f}", font=self.app.FONT_BOLD).pack(fill='x', anchor='w')
             ttk.Separator(self.frame_resultado).pack(fill='x', pady=5)
             ttk.Label(self.frame_resultado, text=f"TOTAL A SER PAGO: R$ {self.calculo_resultado['total_a_pagar']:.2f}", font=self.app.FONT_BOLD).pack(fill='x', anchor='w')

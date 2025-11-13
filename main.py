@@ -5,6 +5,7 @@ Arquivo: main.py (O antigo simulacaocanciron.py)
 Descrição: Este é o arquivo principal que executa o aplicativo.
 Ele contém a classe App, gerencia a janela principal, a sidebar,
 o login e chama as 'Views' (telas) corretas.
+(v5.3.1 - Correção forçada de Path)
 """
 
 import ttkbootstrap as ttk
@@ -19,14 +20,21 @@ from tkinter import ttk as standard_ttk
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 import os
-import sys
+import sys # <-- IMPORTADO SYS
 import requests
 import webbrowser
 import platform
 import csv
 import traceback
+
+# --- CORREÇÃO DE PATH ---
+# Adiciona o diretório atual ao path do Python
+SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(SCRIPT_PATH)
+# --- FIM DA CORREÇÃO ---
+
 try:
-    from PIL import Image, ImageTk, ImageDraw, ImageOps
+    from PIL import Image, ImageTk, ImageDraw, ImageOps, ImageFont
     import piexif
 except ImportError:
     messagebox.showerror("Erro de Dependência", "Pillow e Piexif são necessários. Rode 'pip install Pillow piexif'")
@@ -34,8 +42,8 @@ except ImportError:
 # --- Importa o gerenciador do Firebase ---
 try:
     import firebase_manager as fm
-except ImportError:
-    messagebox.showerror("Erro de Arquivo", "Arquivo 'firebase_manager.py' não encontrado.")
+except ImportError as e:
+    messagebox.showerror("Erro de Arquivo", f"Arquivo 'firebase_manager.py' não encontrado.\n\nDetalhe: {e}")
     sys.exit()
 
 # --- Importa as novas Views (Telas) ---
@@ -43,23 +51,20 @@ from view_simulador import SimuladorView
 from view_comissao import ComissaoView
 from view_folgas import FolgasView
 from view_liberacoes import LiberacoesView
+from view_achados import AchadosView 
 from view_developer import DeveloperView
+
 # --- Importa as Funções de Utilidade ---
-# (Não precisamos importar tudo aqui, apenas o que o main.py usar)
 from app_utils import formatar_data
 
 import shutil
 
 # --- Variáveis Globais e Constantes ---
-APP_VERSION = "5.2.2-Refatorado-Fix" # ATUALIZADO
+APP_VERSION = "5.3.0-Achados" # ATUALIZADO
 VERSION_URL = "https://raw.githubusercontent.com/gabriielgouvea/veritas/main/version.json"
 
-# CORREÇÃO: Define o caminho da pasta 'data'
-SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
+# O SCRIPT_PATH já foi definido lá em cima
 DATA_FOLDER_PATH = os.path.join(SCRIPT_PATH, "data") # Pasta para todos os dados
-
-# --- REMOVIDA A VARIÁVEL GLOBAL ---
-# consultor_logado_data = {} 
 
 PROFILE_PIC_SIZE = (96, 96)
 ICON_SIZE = (22, 22)
@@ -115,7 +120,6 @@ class App(ttk.Window):
         self.lista_completa_consultores = fm.carregar_consultores()
         self.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
         
-        # --- CORREÇÃO: Variável agora é um atributo da classe ---
         self.consultor_logado_data = {}
         
         self.tracked_scrolled_frames = [] # Lista para rastrear ScrolledFrames
@@ -173,10 +177,12 @@ class App(ttk.Window):
             self.icon_updates = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "updates.png")).resize(ICON_SIZE))
             self.icon_developer = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "developer.png")).resize(ICON_SIZE))
             self.icon_liberacoes = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "entries.png")).resize(ICON_SIZE))
+            self.icon_lostfound = ImageTk.PhotoImage(Image.open(os.path.join(DATA_FOLDER_PATH, "lost_found.png")).resize(ICON_SIZE))
         except Exception as e:
             messagebox.showerror("Erro ao Carregar Ícones", f"Não foi possível carregar alguns ícones da pasta 'data'.\n\nErro: {e}")
             self.icon_simulador = self.icon_comissao = self.icon_folgas = self.default_icon
             self.icon_updates = self.icon_developer = self.icon_liberacoes = self.default_icon
+            self.icon_lostfound = self.default_icon # Define como padrão se falhar
 
         try:
             img_logo_original = Image.open(os.path.join(DATA_FOLDER_PATH, "logo_completa.png"))
@@ -221,7 +227,6 @@ class App(ttk.Window):
 
         if is_dev_preview:
             self.dev_preview_photo_tk = loaded_photo
-            # A view 'view_developer' é responsável por atualizar seu próprio label
         else:
             self.profile_photo = loaded_photo
             if hasattr(self, 'profile_pic_label') and self.profile_pic_label.winfo_exists():
@@ -255,10 +260,8 @@ class App(ttk.Window):
 
         if is_dev_preview: 
             self.dev_preview_logo_tk = loaded_photo
-            # A view 'view_developer' é responsável por atualizar seu próprio label
         elif is_marca_logo: 
             self.marca_logo_tk = loaded_photo
-            # A view 'view_liberacoes' é responsável por atualizar seu próprio label
 
     def fix_image_rotation(self, img):
         """Lê os dados EXIF de uma imagem e a rotaciona corretamente."""
@@ -326,11 +329,12 @@ class App(ttk.Window):
         self.create_nav_button(self.sidebar_frame, 3, "Calculadora Comissão", "comissao", self.icon_comissao, self.on_nav_select)
         self.create_nav_button(self.sidebar_frame, 4, "Folgas", "folgas", self.icon_folgas, self.on_nav_select)
         self.create_nav_button(self.sidebar_frame, 5, "Liberações", "liberacoes", self.icon_liberacoes, self.on_nav_select)
-        self.create_nav_button(self.sidebar_frame, 6, "Área do Desenvolvedor", "developer", self.icon_developer, self.on_nav_select)
-        self.create_nav_button(self.sidebar_frame, 7, "Verificar Atualizações", "updates", self.icon_updates, self.on_nav_select)
+        self.create_nav_button(self.sidebar_frame, 6, "Achados e Perdidos", "achados", self.icon_lostfound, self.on_nav_select)
+        self.create_nav_button(self.sidebar_frame, 7, "Área do Desenvolvedor", "developer", self.icon_developer, self.on_nav_select)
+        self.create_nav_button(self.sidebar_frame, 8, "Verificar Atualizações", "updates", self.icon_updates, self.on_nav_select)
         
-        self.sidebar_frame.grid_rowconfigure(8, weight=1) 
-        ttk.Separator(self.sidebar_frame).grid(row=9, column=0, sticky='sew', padx=10, pady=10) 
+        self.sidebar_frame.grid_rowconfigure(9, weight=1) 
+        ttk.Separator(self.sidebar_frame).grid(row=10, column=0, sticky='sew', padx=10, pady=10) 
 
     def on_nav_select(self):
         """Chamado quando um botão de navegação é clicado."""
@@ -393,6 +397,10 @@ class App(ttk.Window):
             
         elif view_name == "liberacoes":
             LiberacoesView(self, self.main_frame)
+        
+        # --- NOVA VIEW ---
+        elif view_name == "achados":
+            AchadosView(self, self.main_frame)
             
         elif view_name == "developer_area":
             DeveloperView(self, self.main_frame)
@@ -459,8 +467,6 @@ class App(ttk.Window):
         self.combo_consultor_login.set("") 
         
         def on_login():
-            # --- CORREÇÃO: Remove 'global' ---
-            # global consultor_logado_data 
             consultor_selecionado = self.combo_consultor_login.get()
             if not consultor_selecionado:
                 messagebox.showwarning("Atenção", "Por favor, selecione um consultor para continuar."); return
@@ -469,14 +475,12 @@ class App(ttk.Window):
                  messagebox.showwarning("Consultor Inválido", "O nome digitado não está na lista de consultores.")
                  return
 
-            # --- CORREÇÃO: Atualiza o atributo da classe ---
             self.consultor_logado_data = next((c for c in self.lista_completa_consultores if c['nome'] == consultor_selecionado), None)
 
             if not self.consultor_logado_data:
                 messagebox.showerror("Erro", "Não foi possível encontrar os dados do consultor.")
                 return
 
-            # --- CORREÇÃO: Lê do atributo da classe ---
             self.consultant_label.config(text=self.consultor_logado_data['nome'])
             self.load_profile_picture(self.consultor_logado_data['foto_path'])
             self.trocar_consultor_button.config(text="Trocar Consultor")

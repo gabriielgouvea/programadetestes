@@ -4,11 +4,12 @@
 Arquivo: view_folgas.py
 Descrição: Contém a classe FolgasView, que constrói e gerencia
 a tela de consulta de Folgas.
+(v5.3.1 - Corrigido 'messagebox' não definido)
 """
 
 import ttkbootstrap as ttk
 from ttkbootstrap.widgets.scrolled import ScrolledFrame
-from tkinter import END
+from tkinter import END, messagebox # <-- CORREÇÃO AQUI
 # --- NOVA IMPORTAÇÃO ---
 from tkinter import ttk as standard_ttk
 from datetime import date, datetime
@@ -149,6 +150,7 @@ class FolgasView:
         self.entry_data_folga.delete(0, END)
         self.entry_data_folga.insert(0, date.today().strftime("%d/%m/%Y"))
 
+        # Limpa o frame de resultado
         for widget in self.frame_resultado_folgas.winfo_children():
             widget.destroy()
         ttk.Label(self.frame_resultado_folgas, text="Selecione um consultor ou data para consultar.").pack()

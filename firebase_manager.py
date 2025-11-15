@@ -3,14 +3,14 @@
 """
 Arquivo: firebase_manager.py
 Descrição: Gerencia toda a comunicação com o Firebase (RTDB) e ImageKit.io.
-(v5.6.0 - Adicionadas funções de exclusão de item e foto)
+(v5.7.1 - Corrige crash silencioso na inicialização)
 """
 
 import firebase_admin
 from firebase_admin import credentials, db 
 from tkinter import messagebox
 import os
-import traceback
+import traceback # <-- Importado para mostrar o erro completo
 import io
 from PIL import Image
 
@@ -73,12 +73,24 @@ def init_firebase():
         FIREBASE_CONECTADO = True
         return True
     except FileNotFoundError:
-        messagebox.showerror("Erro Crítico de Firebase", 
-                             f"O arquivo-chave 'firebase-key.json' não foi encontrado em:\n{KEY_FILE_PATH}\n\nO aplicativo não pode se conectar à nuvem.")
+        # --- ***** CORREÇÃO ***** ---
+        # MUDADO DE MESSAGEBOX PARA PRINT
+        print("="*50)
+        print("ERRO CRÍTICO DE FIREBASE")
+        print(f"O arquivo-chave 'firebase-key.json' não foi encontrado em:\n{KEY_FILE_PATH}")
+        print("O aplicativo não pode se conectar à nuvem.")
+        print("="*50)
+        # --- ***** FIM DA CORREÇÃO ***** ---
         return False
     except Exception as e:
-        messagebox.showerror("Erro de Conexão Firebase", 
-                             f"Não foi possível conectar ao Firebase:\n{e}\n\n{traceback.format_exc()}")
+        # --- ***** CORREÇÃO ***** ---
+        # MUDADO DE MESSAGEBOX PARA PRINT
+        print("="*50)
+        print("ERRO DE CONEXÃO FIREBASE")
+        print(f"Não foi possível conectar ao Firebase:\n{e}")
+        print("="*50)
+        traceback.print_exc() # Imprime o traceback completo
+        # --- ***** FIM DA CORREÇÃO ***** ---
         return False
 
 # --- Funções de Consultores (RTDB) ---
@@ -144,7 +156,7 @@ def salvar_marcas(dados_marcas):
         messagebox.showerror("Erro Firebase", f"Erro ao salvar marcas: {e}")
         return False
 
-# --- NOVO: Funções de Achados e Perdidos ---
+# --- Funções de Achados e Perdidos ---
 
 def upload_foto_item_imagekit(imagem_pil, n_controle):
     """
@@ -211,7 +223,6 @@ def salvar_novo_item_achado(item_data):
         messagebox.showerror("Erro ao Salvar", f"Não foi possível salvar os dados do item no RTDB.\n\nErro: {e}")
         return False
 
-# --- FUNÇÃO QUE ESTAVA FALTANDO ---
 def carregar_itens_achados():
     """
     (RTDB) Carrega TODOS os itens da coleção 'achados_e_perdidos'.
@@ -225,7 +236,6 @@ def carregar_itens_achados():
         messagebox.showerror("Erro Firebase", f"Erro ao carregar itens de Achados e Perdidos: {e}")
         return {}
 
-# --- FUNÇÕES DE EXCLUSÃO (NOVAS) ---
 def excluir_item_achado(item_id):
     """
     (RTDB) Exclui um item da coleção 'achados_e_perdidos'
@@ -250,4 +260,58 @@ def excluir_foto_item_imagekit(file_id):
     except Exception as e:
         # Não mostra um erro, só avisa no console
         print(f"AVISO: Falha ao excluir foto do ImageKit (ID: {file_id}). Erro: {e}")
+        return False
+        
+# --- ***** NOVAS FUNÇÕES: CAIXA DE COMISSÃO ***** ---
+
+def carregar_caixa_comissao():
+    """
+    (RTDB) Carrega TODOS os registros do caixa de comissão.
+    """
+    if not db_ref: return {}
+    try:
+        ref = db_ref.child('caixa_comissao') 
+        data = ref.get()
+        return data if data else {} 
+    except Exception as e:
+        messagebox.showerror("Erro Firebase", f"Erro ao carregar o caixa de comissão: {e}")
+        return {} 
+
+def salvar_caixa_comissao(dados_caixa):
+    """
+    (RTDB) Salva os dados completos do caixa de comissão.
+    """
+    if not db_ref: return False
+    try:
+        ref = db_ref.child('caixa_comissao')
+        ref.set(dados_caixa)
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro Firebase", f"Erro ao salvar o caixa de comissão: {e}")
+        return False
+
+def carregar_pins_consultores():
+    """
+    (RTDB) Carrega a lista de PINs dos consultores.
+    """
+    if not db_ref: return {}
+    try:
+        ref = db_ref.child('pins_consultores') 
+        data = ref.get()
+        return data if data else {} 
+    except Exception as e:
+        messagebox.showerror("Erro Firebase", f"Erro ao carregar PINs: {e}")
+        return {} 
+
+def salvar_pins_consultores(dados_pins):
+    """
+    (RTDB) Salva a lista de PINs dos consultores.
+    """
+    if not db_ref: return False
+    try:
+        ref = db_ref.child('pins_consultores')
+        ref.set(dados_pins)
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro Firebase", f"Erro ao salvar PINs: {e}")
         return False

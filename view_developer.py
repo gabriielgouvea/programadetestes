@@ -3,14 +3,15 @@
 """
 Arquivo: view_developer.py
 Descrição: Contém a classe DeveloperView, que constrói e gerencia
-toda a Área do Desenvolvedor (Abas de Consultores e Marcas).
-(v5.6.3 - Corrige o preview da logo da marca ao fazer upload)
+toda a Área do Desenvolvedor (Abas de Consultores, Marcas e Auditoria).
+(v5.14.0 - Código Original Restaurado + Aba Admin Corrigida)
 """
 
 import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 from ttkbootstrap.widgets import DateEntry
 from tkinter import messagebox, Toplevel, Entry, Button, StringVar, \
-    PhotoImage, Listbox, filedialog, END, ANCHOR
+    PhotoImage, Listbox, filedialog, END, ANCHOR, IntVar, DoubleVar
 import os
 import shutil
 from datetime import date, datetime
@@ -19,15 +20,13 @@ from datetime import date, datetime
 import firebase_manager as fm
 
 # --- Importa as funções de utilidade ---
-from app_utils import formatar_data
+from app_utils import formatar_data, formatar_reais
 
 class DeveloperView:
 
     def __init__(self, app, main_frame):
         """
         Constrói a tela da Área do Desenvolvedor.
-        'app' é a referência à classe principal (App)
-        'main_frame' é o frame onde esta tela será desenhada
         """
         self.app = app
         self.main_frame = main_frame
@@ -36,10 +35,9 @@ class DeveloperView:
         self.lista_completa_consultores = fm.carregar_consultores()
         self.dados_marcas = fm.carregar_marcas()
         self.dados_folgas = fm.carregar_folgas()
+        self.dados_caixa = fm.carregar_caixa_comissao() # Novo para Admin
         
-        # --- Início: Código de create_developer_area_view ---
-        
-        ttk.Label(self.main_frame, text="Área do Desenvolvedor", font=self.app.FONT_TITLE).pack(pady=(0, 10), anchor='w')
+        ttk.Label(self.main_frame, text="Área do Desenvolvedor & Admin", font=self.app.FONT_TITLE).pack(pady=(0, 10), anchor='w')
 
         # 1. Cria o Notebook (o gerenciador de abas)
         notebook = ttk.Notebook(self.main_frame)
@@ -48,17 +46,18 @@ class DeveloperView:
         # 2. Cria os frames para cada aba
         tab_consultores = ttk.Frame(notebook, padding=10)
         tab_marcas = ttk.Frame(notebook, padding=10)
+        tab_fechamentos = ttk.Frame(notebook, padding=10) # Nova Aba
         
         notebook.add(tab_consultores, text=' Gerenciar Consultores ')
         notebook.add(tab_marcas, text=' Gerenciar Marcas ')
+        notebook.add(tab_fechamentos, text=' 🛡️ Gerenciar Fechamentos (Admin) ')
 
         # 3. Preenche cada aba
         self.create_dev_tab_consultores(tab_consultores)
         self.create_dev_tab_marcas(tab_marcas)
+        self.create_dev_tab_fechamentos(tab_fechamentos) # Nova função
 
-        # --- Fim: Código de create_developer_area_view ---
-
-    # --- ABA 1: GERENCIAR CONSULTORES ---
+    # --- ABA 1: GERENCIAR CONSULTORES (Código Original) ---
 
     def create_dev_tab_consultores(self, parent_frame):
         """Cria o conteúdo da aba 'Gerenciar Consultores'."""
@@ -97,7 +96,6 @@ class DeveloperView:
         self.dev_foto_label = ttk.Label(frame_form, image=self.app.default_profile_photo, background=self.app.COLOR_SIDEBAR_LIGHT)
         self.dev_foto_label.pack(anchor='w', pady=5)
         
-        # O 'command' agora chama um método desta classe
         ttk.Button(frame_form, text="Fazer Upload de Nova Foto...", command=self.dev_fazer_upload).pack(anchor='w', pady=5)
 
         ttk.Label(frame_form, text="Nome:").pack(anchor='w', pady=(10, 2))
@@ -113,9 +111,9 @@ class DeveloperView:
         ttk.Button(frame_form, text="Salvar Alterações na Nuvem", style="primary.TButton", command=self.dev_salvar_alteracoes).pack(anchor='w', pady=20)
 
         self.dev_folgas_button = ttk.Button(frame_form, text="Ajustar Folgas",
-                                           command=self.show_folgas_popup,
-                                           style="info.TButton",
-                                           state='disabled')
+                                            command=self.show_folgas_popup,
+                                            style="info.TButton",
+                                            state='disabled')
         self.dev_folgas_button.pack(anchor='w', pady=5, ipady=4)
         
         self.populate_consultor_tree() # Preenche a lista
@@ -193,9 +191,7 @@ class DeveloperView:
         if is_marca_upload:
             self.dev_marca_logo_path_var.set(filename)
             self.app.load_image_no_circular(filename, size=self.app.LOGO_MARCA_SIZE, is_dev_preview=True)
-            # --- ***** AQUI ESTÁ A CORREÇÃO ***** ---
             self.dev_marca_logo_label.config(image=self.app.dev_preview_logo_tk)
-            # --- ***** FIM DA CORREÇÃO ***** ---
         else:
             self.dev_foto_path_var.set(filename)
             self.app.load_profile_picture(filename, size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
@@ -313,7 +309,7 @@ class DeveloperView:
             messagebox.showerror("Erro de Firebase", "Não foi possível excluir o consultor.")
 
 
-    # --- ABA 2: GERENCIAR MARCAS ---
+    # --- ABA 2: GERENCIAR MARCAS (Código Original) ---
 
     def create_dev_tab_marcas(self, parent_frame):
         """Cria o conteúdo da aba 'Gerenciar Marcas'."""
@@ -343,11 +339,11 @@ class DeveloperView:
                    command=self.dev_adicionar_marca).pack(side='left', padx=5)
                    
         self.dev_btn_editar_marca = ttk.Button(frame_lista_botoes, text="Editar/Ver Pessoas", style="primary.Outline.TButton", 
-                                                command=self.show_marca_popup, state='disabled')
+                                        command=self.show_marca_popup, state='disabled')
         self.dev_btn_editar_marca.pack(side='left', padx=5)
 
         self.dev_btn_excluir_marca = ttk.Button(frame_lista_botoes, text="Excluir", style="danger.Outline.TButton",
-                                                 command=self.dev_excluir_marca, state='disabled')
+                                        command=self.dev_excluir_marca, state='disabled')
         self.dev_btn_excluir_marca.pack(side='left', padx=5)
 
         self.dev_tree_marcas.bind('<<TreeviewSelect>>', self.on_dev_tree_marcas_select)
@@ -433,7 +429,224 @@ class DeveloperView:
         else:
             messagebox.showerror("Erro de Firebase", "Não foi possível excluir a marca.")
 
-    # --- POPUPS DE FOLGAS E MARCAS ---
+    # --- ABA 3: GERENCIAR FECHAMENTOS (ADMIN - NOVO) ---
+
+    def create_dev_tab_fechamentos(self, parent_frame):
+        """Cria a aba de auditoria e edição de fechamentos."""
+        
+        # Topo: Filtros
+        frame_filtros = ttk.Frame(parent_frame)
+        frame_filtros.pack(fill='x', pady=5)
+        
+        ttk.Label(frame_filtros, text="Filtrar por Consultor:", font=("Segoe UI", 10, "bold")).pack(side='left', padx=5)
+        
+        self.cb_filtro_caixa = ttk.Combobox(frame_filtros, values=["Todos"] + self.app.nomes_consultores, state="readonly", width=25)
+        self.cb_filtro_caixa.set("Todos")
+        self.cb_filtro_caixa.pack(side='left', padx=5)
+        self.cb_filtro_caixa.bind("<<ComboboxSelected>>", lambda e: self.populate_fechamentos_tree())
+        
+        ttk.Button(frame_filtros, text="🔄 Atualizar Lista", command=self.populate_fechamentos_tree, style="secondary.Outline.TButton").pack(side='left', padx=15)
+        
+        # Tabela Principal
+        cols = ('data', 'consultor', 'v_pdf', 'v_planos', 'total', 'id_oculto', 'mes_oculto')
+        self.tree_caixa = ttk.Treeview(parent_frame, columns=cols, show='headings', selectmode='browse', height=15)
+        
+        self.tree_caixa.heading('data', text='Data do Registro')
+        self.tree_caixa.heading('consultor', text='Consultor')
+        self.tree_caixa.heading('v_pdf', text='Comissão (PDF)')
+        self.tree_caixa.heading('v_planos', text='Comissão Planos')
+        self.tree_caixa.heading('total', text='Total do Dia')
+        
+        self.tree_caixa.column('data', width=100, anchor='center')
+        self.tree_caixa.column('consultor', width=200, anchor='w')
+        self.tree_caixa.column('v_pdf', width=120, anchor='e')
+        self.tree_caixa.column('v_planos', width=120, anchor='e')
+        self.tree_caixa.column('total', width=120, anchor='e')
+        # Colunas ocultas para controle
+        self.tree_caixa.column('id_oculto', width=0, stretch=False)
+        self.tree_caixa.column('mes_oculto', width=0, stretch=False)
+        
+        # Scrollbar
+        scroll = ttk.Scrollbar(parent_frame, orient="vertical", command=self.tree_caixa.yview)
+        self.tree_caixa.configure(yscrollcommand=scroll.set)
+        
+        self.tree_caixa.pack(side='left', fill='both', expand=True, pady=10)
+        scroll.pack(side='right', fill='y', pady=10)
+        
+        # Botões de Ação (Rodapé)
+        frame_actions = ttk.Frame(parent_frame)
+        frame_actions.pack(side='bottom', fill='x', pady=10)
+        
+        ttk.Label(frame_actions, text="Ações Administrativas:", font=("Segoe UI", 10, "bold")).pack(side='left')
+        
+        ttk.Button(frame_actions, text="✏️ Editar Valores", style="primary.TButton", 
+                   command=self.dev_editar_fechamento).pack(side='left', padx=10)
+                   
+        ttk.Button(frame_actions, text="🗑️ Excluir Registro", style="danger.TButton", 
+                   command=self.dev_excluir_fechamento).pack(side='left', padx=0)
+
+        self.populate_fechamentos_tree()
+
+    def populate_fechamentos_tree(self):
+        """Preenche a lista de fechamentos (Auditoria)."""
+        for i in self.tree_caixa.get_children(): self.tree_caixa.delete(i)
+        
+        self.dados_caixa = fm.carregar_caixa_comissao() # Atualiza
+        filtro = self.cb_filtro_caixa.get()
+        
+        items_para_exibir = []
+        
+        # Itera sobre tudo para achatar a estrutura
+        for consultor, meses in self.dados_caixa.items():
+            if filtro != "Todos" and consultor != filtro:
+                continue
+                
+            for mes_ano, registros in meses.items():
+                for id_reg, dados in registros.items():
+                    try:
+                        # Tenta criar objeto data para ordenar
+                        dt_obj = datetime.strptime(dados.get('data'), "%d/%m/%Y")
+                        items_para_exibir.append({
+                            'dt_obj': dt_obj,
+                            'data_str': dados.get('data'),
+                            'consultor': consultor,
+                            'v_pdf': dados.get('comissao_produtos', 0),
+                            'v_planos': dados.get('comissao_planos', 0),
+                            'total': dados.get('total_dia', 0),
+                            'id': id_reg,
+                            'mes': mes_ano
+                        })
+                    except: pass
+        
+        # Ordena do mais recente para o mais antigo
+        items_para_exibir.sort(key=lambda x: x['dt_obj'], reverse=True)
+        
+        for it in items_para_exibir:
+            self.tree_caixa.insert('', 'end', values=(
+                it['data_str'],
+                it['consultor'],
+                formatar_reais(it['v_pdf']),
+                formatar_reais(it['v_planos']),
+                formatar_reais(it['total']),
+                it['id'],
+                it['mes']
+            ))
+
+    def dev_excluir_fechamento(self):
+        """Remove um registro de fechamento."""
+        sel = self.tree_caixa.focus()
+        if not sel:
+            messagebox.showwarning("Seleção", "Selecione um registro para excluir."); return
+            
+        vals = self.tree_caixa.item(sel, 'values')
+        data_reg, consultor, v_total, id_reg, mes_ano = vals[0], vals[1], vals[4], vals[5], vals[6]
+        
+        msg = f"ATENÇÃO: Você está prestes a excluir o fechamento de {consultor} do dia {data_reg}.\nValor: {v_total}\n\nEssa ação é irreversível. Confirma?"
+        if not messagebox.askyesno("Confirmar Exclusão", msg): return
+        
+        try:
+            self.dados_caixa[consultor][mes_ano].pop(id_reg)
+            if fm.salvar_caixa_comissao(self.dados_caixa):
+                self.app.show_toast("Sucesso", "Registro excluído.")
+                self.populate_fechamentos_tree()
+            else:
+                messagebox.showerror("Erro", "Falha ao salvar no banco de dados.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro técnico ao excluir: {e}")
+
+    def dev_editar_fechamento(self):
+        """Abre popup para editar os valores de um fechamento."""
+        sel = self.tree_caixa.focus()
+        if not sel:
+            messagebox.showwarning("Seleção", "Selecione um registro para editar."); return
+
+        vals = self.tree_caixa.item(sel, 'values')
+        # Recupera dados originais do dict para ter precisão (não usar string formatada)
+        consultor, id_reg, mes_ano = vals[1], vals[5], vals[6]
+        dados_originais = self.dados_caixa[consultor][mes_ano][id_reg]
+        
+        # Popup
+        popup = Toplevel(self.app)
+        popup.title(f"Editar: {consultor}")
+        self.app._center_popup(popup, 400, 450)
+        
+        container = ttk.Frame(popup, padding=20)
+        container.pack(fill='both', expand=True)
+        
+        ttk.Label(container, text=f"Editando registro de {consultor}", font=("Segoe UI", 10, "bold")).pack(pady=(0,15))
+        
+        # Campos
+        ttk.Label(container, text="Data do Registro:").pack(anchor='w')
+        ent_data = DateEntry(container, dateformat="%d/%m/%Y", bootstyle='primary')
+        ent_data.entry.delete(0, END)
+        ent_data.entry.insert(0, dados_originais.get('data'))
+        ent_data.pack(fill='x', pady=5)
+        
+        ttk.Label(container, text="Valor Comissão PDF (R$):").pack(anchor='w')
+        var_pdf = DoubleVar(value=dados_originais.get('comissao_produtos', 0.0))
+        ent_pdf = ttk.Entry(container, textvariable=var_pdf)
+        ent_pdf.pack(fill='x', pady=5)
+        
+        ttk.Label(container, text="Qtd. Planos:").pack(anchor='w')
+        var_qtd = IntVar(value=dados_originais.get('qtd_planos', 0))
+        ent_qtd = ttk.Entry(container, textvariable=var_qtd)
+        ent_qtd.pack(fill='x', pady=5)
+        
+        # Atualiza valor total de planos automaticamente
+        lbl_total_planos = ttk.Label(container, text=f"Total Planos: {formatar_reais(var_qtd.get()*40)}", bootstyle='info')
+        lbl_total_planos.pack(anchor='w')
+        
+        def update_lbl(*args):
+            try: lbl_total_planos.config(text=f"Total Planos: {formatar_reais(var_qtd.get()*40)}")
+            except: pass
+        var_qtd.trace_add('write', update_lbl)
+
+        def salvar_edicao():
+            try:
+                nova_data = ent_data.entry.get()
+                novo_v_pdf = float(ent_pdf.get())
+                # CORREÇÃO DE INDENTAÇÃO AQUI (AGORA CORRETA):
+                nova_qtd = int(ent_qtd.get()) 
+                novo_v_planos = nova_qtd * 40.0
+                novo_total = novo_v_pdf + novo_v_planos
+                
+                # Verifica se mudou o mês (precisa mover de chave)
+                dt_obj = datetime.strptime(nova_data, "%d/%m/%Y")
+                novo_mes_ano = dt_obj.strftime("%Y-%m")
+                
+                registro_atualizado = dados_originais.copy()
+                registro_atualizado.update({
+                    "data": nova_data,
+                    "comissao_produtos": novo_v_pdf,
+                    "comissao_planos": novo_v_planos,
+                    "qtd_planos": nova_qtd,
+                    "total_dia": novo_total
+                })
+                
+                # Se mudou o mês, remove do antigo e põe no novo
+                if novo_mes_ano != mes_ano:
+                    self.dados_caixa[consultor][mes_ano].pop(id_reg)
+                    if novo_mes_ano not in self.dados_caixa[consultor]:
+                        self.dados_caixa[consultor][novo_mes_ano] = {}
+                    self.dados_caixa[consultor][novo_mes_ano][id_reg] = registro_atualizado
+                else:
+                    # Mesmo mês, só atualiza
+                    self.dados_caixa[consultor][mes_ano][id_reg] = registro_atualizado
+                
+                if fm.salvar_caixa_comissao(self.dados_caixa):
+                    self.app.show_toast("Sucesso", "Registro atualizado.")
+                    self.populate_fechamentos_tree()
+                    popup.destroy()
+                else:
+                    messagebox.showerror("Erro", "Falha ao salvar edição.")
+                    
+            except ValueError:
+                messagebox.showerror("Erro", "Valores inválidos. Use ponto para decimais (ex: 45.50).")
+
+        ttk.Button(container, text="Salvar Alterações", style="success.TButton", command=salvar_edicao).pack(side='bottom', fill='x', pady=15)
+
+
+    # --- POPUPS DE FOLGAS E MARCAS (Código Original) ---
 
     def show_folgas_popup(self):
         """Mostra um popup para gerenciar a lista de folgas de um consultor."""
@@ -560,19 +773,19 @@ class DeveloperView:
         self.dev_marca_logo_label.pack(anchor='w', pady=5)
         
         btn_upload_logo = ttk.Button(frame_detalhes, text="Fazer Upload de Nova Logo...", 
-                                      command=lambda: self.dev_fazer_upload(is_marca_upload=True, parent_popup=popup))
+                                     command=lambda: self.dev_fazer_upload(is_marca_upload=True, parent_popup=popup))
         btn_upload_logo.pack(anchor='w', pady=5)
 
         ttk.Label(frame_detalhes, text="Caminho da Logo:").pack(anchor='w', pady=(10, 2))
         self.dev_marca_logo_path_var = StringVar(value=logo_path_atual)
         entry_logo_path = ttk.Entry(frame_detalhes, width=40, font=self.app.FONT_MAIN, 
-                                      textvariable=self.dev_marca_logo_path_var, state='readonly')
+                                    textvariable=self.dev_marca_logo_path_var, state='readonly')
         entry_logo_path.pack(anchor='w', fill='x', pady=5)
         
         ttk.Label(frame_detalhes, text="Nome da Marca:").pack(anchor='w', pady=(10, 2))
         dev_marca_nome_var = StringVar(value=nome_marca_original)
         entry_marca_nome = ttk.Entry(frame_detalhes, width=40, font=self.app.FONT_MAIN, 
-                                      textvariable=dev_marca_nome_var)
+                                    textvariable=dev_marca_nome_var)
         entry_marca_nome.pack(anchor='w', fill='x', pady=5)
 
         ttk.Label(frame_detalhes, text="Data da Lista (enviada pela gerência):").pack(anchor='w', pady=(10, 2))
@@ -629,13 +842,13 @@ class DeveloperView:
         frame_botoes_lista.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(10,0))
 
         btn_remove_pessoa = ttk.Button(frame_botoes_lista, text="Remover Selecionado", 
-                                       style="danger.Outline.TButton", 
-                                       command=lambda: listbox_pessoas.delete(ANCHOR))
+                                      style="danger.Outline.TButton", 
+                                      command=lambda: listbox_pessoas.delete(ANCHOR))
         btn_remove_pessoa.pack(side='left')
         
         btn_importar_lista = ttk.Button(frame_botoes_lista, text="Importar Lista (.txt)", 
-                                       style="info.Outline.TButton", 
-                                       command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
+                                      style="info.Outline.TButton", 
+                                      command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
         btn_importar_lista.pack(side='left', padx=10)
         
         # --- Botão de Salvar (no rodapé do popup) ---

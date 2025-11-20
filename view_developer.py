@@ -2,9 +2,8 @@
 
 """
 Arquivo: view_developer.py
-Descrição: Contém a classe DeveloperView, que constrói e gerencia
-toda a Área do Desenvolvedor (Abas de Consultores, Marcas e Auditoria).
-(v5.14.0 - Código Original Restaurado + Aba Admin Corrigida)
+Descrição: Contém a classe DeveloperView.
+(v5.16.0 - COMPLETO: Ficha Cadastral Completa + Marcas + Auditoria)
 """
 
 import ttkbootstrap as ttk
@@ -35,88 +34,117 @@ class DeveloperView:
         self.lista_completa_consultores = fm.carregar_consultores()
         self.dados_marcas = fm.carregar_marcas()
         self.dados_folgas = fm.carregar_folgas()
-        self.dados_caixa = fm.carregar_caixa_comissao() # Novo para Admin
+        self.dados_caixa = fm.carregar_caixa_comissao() 
         
         ttk.Label(self.main_frame, text="Área do Desenvolvedor & Admin", font=self.app.FONT_TITLE).pack(pady=(0, 10), anchor='w')
 
-        # 1. Cria o Notebook (o gerenciador de abas)
+        # 1. Cria o Notebook
         notebook = ttk.Notebook(self.main_frame)
         notebook.pack(fill='both', expand=True)
 
         # 2. Cria os frames para cada aba
         tab_consultores = ttk.Frame(notebook, padding=10)
         tab_marcas = ttk.Frame(notebook, padding=10)
-        tab_fechamentos = ttk.Frame(notebook, padding=10) # Nova Aba
+        tab_fechamentos = ttk.Frame(notebook, padding=10) 
         
-        notebook.add(tab_consultores, text=' Gerenciar Consultores ')
+        # Renomeado para refletir a nova funcionalidade
+        notebook.add(tab_consultores, text=' 👤 Dados Cadastrais (Holerite) ')
         notebook.add(tab_marcas, text=' Gerenciar Marcas ')
         notebook.add(tab_fechamentos, text=' 🛡️ Gerenciar Fechamentos (Admin) ')
 
         # 3. Preenche cada aba
         self.create_dev_tab_consultores(tab_consultores)
         self.create_dev_tab_marcas(tab_marcas)
-        self.create_dev_tab_fechamentos(tab_fechamentos) # Nova função
+        self.create_dev_tab_fechamentos(tab_fechamentos)
 
-    # --- ABA 1: GERENCIAR CONSULTORES (Código Original) ---
+    # --- ABA 1: GERENCIAR CONSULTORES (ATUALIZADA COM FICHA COMPLETA) ---
 
     def create_dev_tab_consultores(self, parent_frame):
-        """Cria o conteúdo da aba 'Gerenciar Consultores'."""
+        """Cria o conteúdo da aba 'Dados Cadastrais'."""
         pw = ttk.Panedwindow(parent_frame, orient='horizontal') 
         pw.pack(fill='both', expand=True)
 
-        # --- Lado Esquerdo: Lista de Consultores ---
+        # --- Lado Esquerdo: Lista ---
         frame_lista = ttk.Frame(pw, padding=10)
         pw.add(frame_lista, weight=1)
 
-        ttk.Label(frame_lista, text="Consultores", font=self.app.FONT_BOLD).pack(anchor='w')
+        ttk.Label(frame_lista, text="Usuários (Login)", font=self.app.FONT_BOLD).pack(anchor='w')
 
         cols = ('nome', 'foto_path')
         self.dev_tree = ttk.Treeview(frame_lista, columns=cols, show='headings', height=15, selectmode='browse')
-        self.dev_tree.heading('nome', text='Nome do Consultor')
-        self.dev_tree.heading('foto_path', text='Caminho da Foto')
-        self.dev_tree.column('nome', width=200)
-        self.dev_tree.column('foto_path', width=150)
+        self.dev_tree.heading('nome', text='Apelido / Login')
+        self.dev_tree.heading('foto_path', text='Arquivo Foto')
+        self.dev_tree.column('nome', width=150)
+        self.dev_tree.column('foto_path', width=100)
         self.dev_tree.pack(fill='both', expand=True, pady=10)
 
         self.dev_tree.bind('<<TreeviewSelect>>', self.on_dev_tree_select)
 
         frame_lista_botoes = ttk.Frame(frame_lista)
         frame_lista_botoes.pack(fill='x', pady=5)
-        ttk.Button(frame_lista_botoes, text="Adicionar Novo", style="success.TButton", command=self.dev_adicionar_novo).pack(side='left', padx=5)
-        ttk.Button(frame_lista_botoes, text="Excluir Selecionado", style="danger.Outline.TButton", command=self.dev_excluir_selecionado).pack(side='left', padx=5)
+        ttk.Button(frame_lista_botoes, text="+ Novo", style="success.TButton", command=self.dev_adicionar_novo).pack(side='left', padx=5)
+        ttk.Button(frame_lista_botoes, text="- Excluir", style="danger.Outline.TButton", command=self.dev_excluir_selecionado).pack(side='left', padx=5)
 
-        # --- Lado Direito: Formulário de Edição ---
+        # --- Lado Direito: Formulário Completo ---
         frame_form = ttk.Frame(pw, padding=10)
-        pw.add(frame_form, weight=2)
+        pw.add(frame_form, weight=3) # Mais largo para caber os dados
 
-        ttk.Label(frame_form, text="Editar Consultor", font=self.app.FONT_BOLD).pack(anchor='w')
-
-        ttk.Label(frame_form, text="Foto de Perfil:").pack(anchor='w', pady=(10, 2))
+        # Cabeçalho (Foto e Botões)
+        frame_header = ttk.Frame(frame_form)
+        frame_header.pack(fill='x', pady=(0,10))
         
-        self.dev_foto_label = ttk.Label(frame_form, image=self.app.default_profile_photo, background=self.app.COLOR_SIDEBAR_LIGHT)
-        self.dev_foto_label.pack(anchor='w', pady=5)
+        self.dev_foto_label = ttk.Label(frame_header, image=self.app.default_profile_photo, background=self.app.COLOR_SIDEBAR_LIGHT)
+        self.dev_foto_label.pack(side='left', padx=(0,15))
         
-        ttk.Button(frame_form, text="Fazer Upload de Nova Foto...", command=self.dev_fazer_upload).pack(anchor='w', pady=5)
+        frame_header_btns = ttk.Frame(frame_header)
+        frame_header_btns.pack(side='left', fill='both')
+        
+        ttk.Button(frame_header_btns, text="Carregar Foto...", command=self.dev_fazer_upload, style='secondary.Outline.TButton').pack(anchor='w', pady=2)
+        self.dev_folgas_button = ttk.Button(frame_header_btns, text="📅 Escala de Folgas", command=self.show_folgas_popup, style="info.Outline.TButton", state='disabled')
+        self.dev_folgas_button.pack(anchor='w', pady=2)
 
-        ttk.Label(frame_form, text="Nome:").pack(anchor='w', pady=(10, 2))
-        self.dev_nome_var = StringVar()
-        self.dev_nome_entry = ttk.Entry(frame_form, width=50, font=self.app.FONT_MAIN, textvariable=self.dev_nome_var)
-        self.dev_nome_entry.pack(anchor='w', fill='x', pady=5)
-
-        ttk.Label(frame_form, text="Caminho do Arquivo da Foto:").pack(anchor='w', pady=(10, 2))
+        # Campos de Texto (Grid Layout)
+        frame_grid = ttk.Frame(frame_form)
+        frame_grid.pack(fill='x', pady=10)
+        
+        # Variáveis
+        self.dev_nome_var = StringVar() # Login/Apelido
         self.dev_foto_path_var = StringVar()
-        self.dev_foto_path_entry = ttk.Entry(frame_form, width=50, font=self.app.FONT_MAIN, textvariable=self.dev_foto_path_var, state='readonly')
-        self.dev_foto_path_entry.pack(anchor='w', fill='x', pady=5)
-
-        ttk.Button(frame_form, text="Salvar Alterações na Nuvem", style="primary.TButton", command=self.dev_salvar_alteracoes).pack(anchor='w', pady=20)
-
-        self.dev_folgas_button = ttk.Button(frame_form, text="Ajustar Folgas",
-                                            command=self.show_folgas_popup,
-                                            style="info.TButton",
-                                            state='disabled')
-        self.dev_folgas_button.pack(anchor='w', pady=5, ipady=4)
         
-        self.populate_consultor_tree() # Preenche a lista
+        # Novas Variáveis para o Holerite
+        self.var_nome_completo = StringVar()
+        self.var_cpf = StringVar()
+        self.var_nascimento = StringVar()
+        self.var_email = StringVar()
+        self.var_telefone = StringVar()
+
+        def criar_campo(lbl, var, row, col, width=30):
+            ttk.Label(frame_grid, text=lbl, font=("Segoe UI", 9)).grid(row=row, column=col, sticky='w', padx=5, pady=(5,0))
+            e = ttk.Entry(frame_grid, textvariable=var, width=width, font=self.app.FONT_MAIN)
+            e.grid(row=row+1, column=col, sticky='w', padx=5, pady=(0,10))
+            return e
+
+        # Linha 0
+        criar_campo("Usuário (Apelido de Login) *", self.dev_nome_var, 0, 0)
+        criar_campo("Nome Completo (Para Holerite) *", self.var_nome_completo, 0, 1, width=45)
+        
+        # Linha 2
+        criar_campo("CPF", self.var_cpf, 2, 0)
+        criar_campo("Data de Nascimento", self.var_nascimento, 2, 1)
+        
+        # Linha 4
+        criar_campo("Email", self.var_email, 4, 0, width=35)
+        criar_campo("Telefone", self.var_telefone, 4, 1)
+        
+        # Linha 6 (Foto Path - Readonly)
+        ttk.Label(frame_grid, text="Arquivo da Foto (Sistema)", font=("Segoe UI", 8)).grid(row=6, column=0, columnspan=2, sticky='w', padx=5)
+        ttk.Entry(frame_grid, textvariable=self.dev_foto_path_var, state='readonly', width=80).grid(row=7, column=0, columnspan=2, sticky='w', padx=5)
+
+        # Botão Salvar
+        ttk.Separator(frame_form).pack(fill='x', pady=15)
+        ttk.Button(frame_form, text="💾 Salvar Dados Cadastrais", style="primary.TButton", command=self.dev_salvar_alteracoes, width=30).pack(pady=5)
+        
+        self.populate_consultor_tree()
 
     def populate_consultor_tree(self):
         """Limpa e preenche a Treeview de Consultores."""
@@ -124,21 +152,16 @@ class DeveloperView:
         for item in self.dev_tree.get_children():
             self.dev_tree.delete(item)
 
-        # Atualiza a variável de nomes
         self.app.nomes_consultores = [c['nome'] for c in self.lista_completa_consultores]
         
         for consultor in self.lista_completa_consultores:
             self.dev_tree.insert('', 'end', values=(consultor['nome'], consultor['foto_path']))
 
-        # Limpa o formulário da direita
-        if hasattr(self, 'dev_nome_var'):
-            self.dev_nome_var.set("")
-        if hasattr(self, 'dev_foto_path_var'):
-            self.dev_foto_path_var.set("")
+        # Limpa o formulário
+        for v in [self.dev_nome_var, self.dev_foto_path_var, self.var_nome_completo, self.var_cpf, self.var_nascimento, self.var_email, self.var_telefone]:
+            v.set("")
         
-        # Chama o 'load_profile_picture' do app principal
         self.app.load_profile_picture("", size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
-        # Atualiza o label da foto com a imagem carregada (default)
         if hasattr(self, 'dev_foto_label'):
              self.dev_foto_label.config(image=self.app.dev_preview_photo_tk)
         
@@ -153,12 +176,24 @@ class DeveloperView:
             return
 
         values = self.dev_tree.item(selected_iid, 'values')
-        nome, foto_path = values[0], values[1]
+        nome_login, foto_path = values[0], values[1]
 
-        self.dev_nome_var.set(nome)
+        # Recupera dados completos do objeto na lista
+        dados = next((c for c in self.lista_completa_consultores if c['nome'] == nome_login), {})
+
+        self.dev_nome_var.set(nome_login)
         self.dev_foto_path_var.set(foto_path)
+        
+        # Preenche novos campos (se existirem, senão usa string vazia ou fallback)
+        # Se 'nome_completo' não existir, usa o login como placeholder
+        self.var_nome_completo.set(dados.get('nome_completo', dados.get('nome', ''))) 
+        self.var_cpf.set(dados.get('cpf', ''))
+        self.var_nascimento.set(dados.get('nascimento', ''))
+        self.var_email.set(dados.get('email', ''))
+        self.var_telefone.set(dados.get('telefone', ''))
+
         self.app.load_profile_picture(foto_path, size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
-        self.dev_foto_label.config(image=self.app.dev_preview_photo_tk) # Atualiza o label
+        self.dev_foto_label.config(image=self.app.dev_preview_photo_tk)
         self.dev_folgas_button.config(state='normal')
 
     def dev_fazer_upload(self, is_marca_upload=False, parent_popup=None):
@@ -170,8 +205,7 @@ class DeveloperView:
             title="Selecionar foto",
             filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os arquivos", "*.*")]
         )
-        if not filepath:
-            return
+        if not filepath: return
 
         filename = os.path.basename(filepath)
         dest_path = os.path.join(self.app.DATA_FOLDER_PATH, filename)
@@ -182,10 +216,9 @@ class DeveloperView:
             else:
                 shutil.copy(filepath, dest_path)
                 self.app.show_toast("Upload Concluído", f"Arquivo {filename} salvo em 'data'.")
-        
         except Exception as e:
             messagebox.showerror("Erro no Upload", f"Não foi possível copiar o arquivo: {e}", parent=parent)
-            return # Sai da função se a cópia falhar
+            return 
 
         # Atualiza o formulário correto
         if is_marca_upload:
@@ -195,7 +228,7 @@ class DeveloperView:
         else:
             self.dev_foto_path_var.set(filename)
             self.app.load_profile_picture(filename, size=self.app.PROFILE_PIC_SIZE, is_dev_preview=True)
-            self.dev_foto_label.config(image=self.app.dev_preview_photo_tk) # Atualiza o label
+            self.dev_foto_label.config(image=self.app.dev_preview_photo_tk) 
 
     def dev_salvar_alteracoes(self):
         """Salva as mudanças feitas no formulário no consultor selecionado."""
@@ -205,58 +238,67 @@ class DeveloperView:
             return
 
         original_nome = self.dev_tree.item(selected_iid, 'values')[0]
-        novo_nome = self.dev_nome_var.get()
+        novo_nome = self.dev_nome_var.get().strip()
         nova_foto = self.dev_foto_path_var.get()
 
         if not novo_nome:
-            messagebox.showwarning("Campo Vazio", "O nome do consultor não pode estar vazio.")
+            messagebox.showwarning("Campo Vazio", "O Usuário (Login) não pode estar vazio.")
             return
 
-        # Recarrega a lista do DB para evitar sobreposição
+        # Recarrega a lista do DB
         lista_atual_db = fm.carregar_consultores()
-        consultor_encontrado = False
-        for consultor in lista_atual_db:
-            if consultor['nome'] == original_nome:
-                consultor['nome'] = novo_nome
-                consultor['foto_path'] = nova_foto
-                consultor_encontrado = True
-                break
-
-        if not consultor_encontrado:
+        
+        consultor = next((c for c in lista_atual_db if c['nome'] == original_nome), None)
+        
+        if not consultor:
             messagebox.showerror("Erro de Sincronia", f"O consultor '{original_nome}' não foi encontrado no DB.")
             self.lista_completa_consultores = lista_atual_db
             self.populate_consultor_tree()
             return
 
+        # Atualiza Campos Básicos
+        consultor['nome'] = novo_nome
+        consultor['foto_path'] = nova_foto
+        
+        # Atualiza Novos Campos
+        consultor['nome_completo'] = self.var_nome_completo.get().strip().upper()
+        consultor['cpf'] = self.var_cpf.get().strip()
+        consultor['nascimento'] = self.var_nascimento.get().strip()
+        consultor['email'] = self.var_email.get().strip()
+        consultor['telefone'] = self.var_telefone.get().strip()
+
         if fm.salvar_consultores(lista_atual_db):
             self.lista_completa_consultores = lista_atual_db
             self.populate_consultor_tree()
-            self.app.show_toast("Sucesso!", "Consultor atualizado na nuvem.")
+            self.app.show_toast("Sucesso!", "Ficha cadastral atualizada.")
 
-            # Verifica se precisa atualizar o nome nas folgas
-            self.dados_folgas = fm.carregar_folgas()
-            if original_nome in self.dados_folgas and original_nome != novo_nome:
-                if messagebox.askyesno("Atualizar Folgas", f"Deseja transferir os dados de folgas de '{original_nome}' para '{novo_nome}'?"):
+            # Verifica se precisa atualizar o nome nas folgas (Se mudou o login)
+            if original_nome != novo_nome:
+                self.dados_folgas = fm.carregar_folgas()
+                if original_nome in self.dados_folgas:
                     self.dados_folgas[novo_nome] = self.dados_folgas.pop(original_nome)
                     fm.salvar_folgas(self.dados_folgas)
-                    self.app.show_toast("Sucesso!", "Folgas transferidas para o novo nome.")
         else:
             messagebox.showerror("Erro de Firebase", "Não foi possível salvar as alterações.")
 
     def dev_adicionar_novo(self):
         """Adiciona um novo consultor à lista."""
-        novo_nome = "NOVO CONSULTOR"
+        novo_nome = "NOVO_USUARIO"
         nova_foto = "default_profile.png"
 
         lista_atual_db = fm.carregar_consultores() 
         
         if any(c['nome'] == novo_nome for c in lista_atual_db):
-            messagebox.showwarning("Erro", "Já existe um 'NOVO CONSULTOR'. Renomeie-o antes de adicionar outro.")
-            self.lista_completa_consultores = lista_atual_db
-            self.populate_consultor_tree() 
+            messagebox.showwarning("Erro", "Já existe um 'NOVO_USUARIO'. Renomeie-o antes de adicionar outro.")
             return
 
-        lista_atual_db.append({"nome": novo_nome, "foto_path": nova_foto})
+        lista_atual_db.append({
+            "nome": novo_nome, 
+            "foto_path": nova_foto,
+            "nome_completo": "NOVO CONSULTOR",
+            "cpf": "",
+            "email": ""
+        })
 
         if fm.salvar_consultores(lista_atual_db):
             self.lista_completa_consultores = lista_atual_db
@@ -266,9 +308,8 @@ class DeveloperView:
                 self.dev_tree.selection_set(last_item)
                 self.dev_tree.focus(last_item)
                 self.on_dev_tree_select() 
-            except:
-                pass
-            self.app.show_toast("Adicionado", "Novo consultor criado. Edite-o e salve.")
+            except: pass
+            self.app.show_toast("Adicionado", "Novo consultor criado. Edite a ficha ao lado.")
         else:
              messagebox.showerror("Erro de Firebase", "Não foi possível salvar o novo consultor.")
 
@@ -281,16 +322,14 @@ class DeveloperView:
 
         original_nome = self.dev_tree.item(selected_iid, 'values')[0]
 
-        if not messagebox.askyesno("Confirmar Exclusão", f"Tem certeza que deseja excluir o consultor:\n\n{original_nome}\n\nEsta ação não pode ser desfeita."):
+        if not messagebox.askyesno("Confirmar Exclusão", f"Tem certeza que deseja excluir:\n\n{original_nome}\n\nEsta ação apaga todos os dados cadastrais."):
             return
 
         lista_atual_db = fm.carregar_consultores()
         nova_lista_db = [c for c in lista_atual_db if c['nome'] != original_nome]
         
         if len(nova_lista_db) == len(lista_atual_db):
-            messagebox.showerror("Erro de Sincronia", f"O consultor '{original_nome}' não foi encontrado no DB.")
-            self.lista_completa_consultores = lista_atual_db
-            self.populate_consultor_tree()
+            messagebox.showerror("Erro", "Consultor não encontrado no DB.")
             return
 
         if fm.salvar_consultores(nova_lista_db):
@@ -298,18 +337,16 @@ class DeveloperView:
             self.populate_consultor_tree()
             self.app.show_toast("Excluído", f"{original_nome} foi removido.")
 
-            # Verifica se precisa remover as folgas
             self.dados_folgas = fm.carregar_folgas()
             if original_nome in self.dados_folgas:
                 if messagebox.askyesno("Remover Folgas", f"Deseja também remover as folgas cadastradas para '{original_nome}'?"):
                     self.dados_folgas.pop(original_nome)
                     fm.salvar_folgas(self.dados_folgas)
-                    self.app.show_toast("Sucesso!", "Folgas removidas.")
         else:
             messagebox.showerror("Erro de Firebase", "Não foi possível excluir o consultor.")
 
 
-    # --- ABA 2: GERENCIAR MARCAS (Código Original) ---
+    # --- ABA 2: GERENCIAR MARCAS (MANTIDO INTEGRALMENTE) ---
 
     def create_dev_tab_marcas(self, parent_frame):
         """Cria o conteúdo da aba 'Gerenciar Marcas'."""
@@ -339,11 +376,11 @@ class DeveloperView:
                    command=self.dev_adicionar_marca).pack(side='left', padx=5)
                    
         self.dev_btn_editar_marca = ttk.Button(frame_lista_botoes, text="Editar/Ver Pessoas", style="primary.Outline.TButton", 
-                                        command=self.show_marca_popup, state='disabled')
+                                               command=self.show_marca_popup, state='disabled')
         self.dev_btn_editar_marca.pack(side='left', padx=5)
 
         self.dev_btn_excluir_marca = ttk.Button(frame_lista_botoes, text="Excluir", style="danger.Outline.TButton",
-                                        command=self.dev_excluir_marca, state='disabled')
+                                                command=self.dev_excluir_marca, state='disabled')
         self.dev_btn_excluir_marca.pack(side='left', padx=5)
 
         self.dev_tree_marcas.bind('<<TreeviewSelect>>', self.on_dev_tree_marcas_select)
@@ -356,7 +393,6 @@ class DeveloperView:
         for item in self.dev_tree_marcas.get_children():
             self.dev_tree_marcas.delete(item)
             
-        # Recarrega os dados
         self.dados_marcas = fm.carregar_marcas()
         
         for nome_marca, dados in sorted(self.dados_marcas.items()):
@@ -364,7 +400,7 @@ class DeveloperView:
             qtd_pessoas = len(dados.get('pessoas', []))
             self.dev_tree_marcas.insert('', 'end', values=(nome_marca, data_att, qtd_pessoas))
             
-        self.on_dev_tree_marcas_select() # Desabilita os botões
+        self.on_dev_tree_marcas_select()
 
     def on_dev_tree_marcas_select(self, event=None):
         """Habilita/desabilita botões de marca ao selecionar."""
@@ -785,7 +821,7 @@ class DeveloperView:
         ttk.Label(frame_detalhes, text="Nome da Marca:").pack(anchor='w', pady=(10, 2))
         dev_marca_nome_var = StringVar(value=nome_marca_original)
         entry_marca_nome = ttk.Entry(frame_detalhes, width=40, font=self.app.FONT_MAIN, 
-                                    textvariable=dev_marca_nome_var)
+                                     textvariable=dev_marca_nome_var)
         entry_marca_nome.pack(anchor='w', fill='x', pady=5)
 
         ttk.Label(frame_detalhes, text="Data da Lista (enviada pela gerência):").pack(anchor='w', pady=(10, 2))
@@ -847,8 +883,8 @@ class DeveloperView:
         btn_remove_pessoa.pack(side='left')
         
         btn_importar_lista = ttk.Button(frame_botoes_lista, text="Importar Lista (.txt)", 
-                                      style="info.Outline.TButton", 
-                                      command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
+                                        style="info.Outline.TButton", 
+                                        command=lambda: self.dev_importar_lista_pessoas(listbox_pessoas, popup))
         btn_importar_lista.pack(side='left', padx=10)
         
         # --- Botão de Salvar (no rodapé do popup) ---
@@ -884,7 +920,7 @@ class DeveloperView:
                 messagebox.showerror("Erro de Firebase", "Não foi possível salvar os dados da marca.", parent=popup)
 
         btn_save_marca = ttk.Button(frame_salvar, text="Salvar Alterações e Fechar",
-                                      style="success.TButton", command=on_save_marca)
+                                    style="success.TButton", command=on_save_marca)
         btn_save_marca.pack(side='right')
 
     def dev_importar_lista_pessoas(self, listbox_pessoas, parent_popup):
